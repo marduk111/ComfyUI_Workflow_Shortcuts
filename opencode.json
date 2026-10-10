@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/mimo-v2.6-flash-free",
+  "mcp": {
+    "comfyui": {
+      "type": "local",
+      "command": ["node", "studio/mcp-comfyui.js"],
+      "cwd": "C:\\Users\\mardu\\OneDrive\\Desktop\\ComfyUI_Workflow_Shortcuts",
+      "enabled": true,
+      "timeout": 30000
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "node studio/studio.js*": "allow",
+      "node studio\\studio.js*": "allow",
+      "*": "ask"
+    },
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "read": "allow",
+    "webfetch": "ask",
+    "todowrite": "allow",
+    "task": "allow"
+  }
+}

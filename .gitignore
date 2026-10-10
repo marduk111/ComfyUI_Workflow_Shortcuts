@@ -1,0 +1,11 @@
+# local session state, uploads, last-run bookkeeping
+studio/data/
+# every project gets its own repository
+projects/
+# AI plugin install / dependencies
+.opencode/
+node_modules/
+# logs & OS junk
+*.log
+Thumbs.db
+.DS_Store

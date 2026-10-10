@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Studio</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127916;</text></svg>">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">
+    <span class="logo">&#9670;</span>
+    <div>
+      <h1>AI Studio</h1>
+      <p id="tagline">Talk. Watch it think. Get your result.</p>
+    </div>
+  </div>
+
+  <div class="services">
+    <div class="svc" id="svc-opencode" title="The AI you chat with">
+      <span class="dot"></span><span class="lbl">AI chat</span>
+    </div>
+    <div class="svc" id="svc-comfyui" title="The local image/video generator">
+      <span class="dot"></span><span class="lbl">Generator</span>
+    </div>
+    <div class="svc" id="svc-ollama" title="Local language models on your machine">
+      <span class="dot"></span><span class="lbl">Local models</span>
+    </div>
+    <div class="svc" id="svc-gpu" title="Your graphics card">
+      <span class="dot"></span><span class="lbl" id="gpu-lbl">GPU</span>
+    </div>
+  </div>
+
+  <div class="top-actions">
+    <select id="model-pick" title="Which AI brain to use"></select>
+    <button id="btn-new-chat" class="ghost" title="Start a fresh conversation">New chat</button>
+  </div>
+</header>
+
+<main id="layout">
+
+  <!-- ============ LEFT: conversation ============ -->
+  <section id="chat-panel" class="panel">
+    <div class="panel-head">
+      <h2>Conversation</h2>
+      <button id="proj-chip" class="proj-chip" title="Which project folder this work belongs to">No project</button>
+      <span class="hint" id="session-hint">connecting&hellip;</span>
+    </div>
+
+    <div id="chat-scroll">
+      <div id="welcome" class="welcome">
+        <div class="welcome-card">
+          <h3>&#128075; What do you want to make?</h3>
+          <p>Describe it in plain words. Upload a photo if the project needs one.
+             I'll plan it, run it, and show you every step while it happens.</p>
+          <div class="examples">
+            <button class="chip" data-ex="Make a photo of me into a studio portrait with dramatic lighting">Portrait from my photo</button>
+            <button class="chip" data-ex="Take my photo and create a short video of me dancing">Video of me dancing</button>
+            <button class="chip" data-ex="Generate a logo for a coffee shop called Ember &amp; Oak">Design a logo</button>
+            <button class="chip" data-ex="Create a fantasy landscape with mountains at sunrise">Fantasy landscape</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="messages"></div>
+
+      <!-- live "thinking" card, kept at the bottom while the AI works -->
+      <div id="live-card" class="live-card hidden">
+        <div class="live-head">
+          <span class="spinner"></span>
+          <strong id="live-title">Thinking&hellip;</strong>
+          <button id="btn-stop" class="mini danger" title="Stop the AI">Stop</button>
+        </div>
+
+        <!-- permission gate: the agent wants to run something -->
+        <div id="perm-card" class="perm-card hidden">
+          <div class="perm-title">&#9888;&#65039; The AI wants your permission</div>
+          <div class="perm-action"><code id="perm-action">bash</code></div>
+          <ul id="perm-resources"></ul>
+          <div class="perm-btns">
+            <button id="perm-once" class="primary">Allow once</button>
+            <button id="perm-always">Always allow</button>
+            <button id="perm-reject" class="ghost danger">Reject</button>
+          </div>
+        </div>
+
+        <div id="live-blocks"></div>
+
+        <div class="live-activity">
+          <div class="act-row" id="act-current"><span class="act-ico">&#8226;</span><span id="act-text">Waiting&hellip;</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="attach-strip" class="attach-strip hidden"></div>
+
+    <form id="composer">
+      <label id="dropzone" for="file-input" title="Drag a photo here or click to browse">
+        <input type="file" id="file-input" accept="image/*,video/*" multiple hidden>
+        <span class="dz-plus">+</span>
+      </label>
+      <textarea id="msg" rows="1" placeholder="Describe what you want to make&hellip;"></textarea>
+      <button type="submit" id="send" title="Send">
+        <span id="send-label">Send</span>
+      </button>
+    </form>
+    <div class="composer-hint">Enter to send &middot; Shift+Enter for a new line &middot; drop an image anywhere</div>
+  </section>
+
+  <!-- ============ CENTER: live workflow ============ -->
+  <section id="flow-panel" class="panel">
+    <div class="panel-head">
+      <h2>Live workflow</h2>
+      <div class="flow-tools">
+        <select id="workflow-pick" title="Choose a workflow"></select>
+        <button id="btn-run" class="primary" title="Run the selected workflow">Run</button>
+        <button id="btn-cancel" class="ghost danger" title="Stop the generator">Cancel</button>
+        <button id="btn-fit" class="ghost" title="Fit the graph to the window">Fit</button>
+      </div>
+    </div>
+
+    <div id="flow-stage">
+      <div id="flow-empty" class="stage-empty">
+        <div>
+          <p class="big">&#9881;&#65039;</p>
+          <p>The workflow appears here as soon as something starts running.</p>
+          <p class="small">Green = finished &nbsp;&middot;&nbsp; Blue = running &nbsp;&middot;&nbsp; Red = failed</p>
+        </div>
+      </div>
+      <div id="flow-canvas" class="hidden">
+        <svg id="flow-links"></svg>
+        <div id="flow-nodes"></div>
+      </div>
+      <div id="flow-progress" class="hidden">
+        <div class="prog-bar"><div id="prog-fill"></div></div>
+        <div class="prog-text"><span id="prog-label">Starting&hellip;</span><span id="prog-num"></span></div>
+      </div>
+      <div id="flow-preview" class="hidden"></div>
+    </div>
+
+    <div id="flow-explain" class="explain hidden">
+      <strong>What is happening:</strong>
+      <span id="explain-text"></span>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT: assets + results ============ -->
+  <section id="side-panel" class="panel">
+    <div class="tabs">
+      <button class="tab" data-tab="projects">Projects</button>
+      <button class="tab active" data-tab="results">Results</button>
+      <button class="tab" data-tab="assets">Your files</button>
+      <button class="tab" data-tab="steps">Steps</button>
+    </div>
+
+    <div class="tab-body hidden" id="tab-projects">
+      <div class="proj-bar">
+        <button id="btn-new-project" class="primary">+ New project</button>
+      </div>
+      <div id="projects-empty" class="side-empty">
+        A project is a folder on your laptop that keeps a job's photos, its results,
+        and its own settings together. Create one when you start something you'll
+        come back to.
+      </div>
+      <div id="projects-list"></div>
+    </div>
+
+    <div class="tab-body" id="tab-results">
+      <div id="results-empty" class="side-empty">Nothing made yet. Your images and videos show up here.</div>
+      <div id="results-grid"></div>
+    </div>
+
+    <div class="tab-body hidden" id="tab-assets">
+      <div class="side-empty">Drop a photo anywhere in the window to add it.</div>
+      <div id="assets-grid"></div>
+    </div>
+
+    <div class="tab-body hidden" id="tab-steps">
+      <div class="side-empty">Every action the AI takes is listed here as it happens.</div>
+      <ol id="steps-list"></ol>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast-host"></div>
+<div id="lightbox" class="lightbox hidden"><img id="lightbox-img" alt=""><button id="lightbox-close">&times;</button></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
