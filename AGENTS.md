@@ -29,6 +29,9 @@ permission popup. Every other `bash` call will, so prefer this one.
 | `set_prompt <file> positive="..."` | Permanently rewrite a workflow's saved prompt. |
 | `set_image <file> filename="x.png"` | Permanently point a workflow at an input image. |
 | `set_audio <file> filename="song.mp3"` | Permanently point a workflow at an input audio file. |
+| `plugin_list` | Audio effect definitions on disk and which are built. |
+| `plugin_test <plugin.json> [input.wav]` | Prove a plugin's DSP graph works before shipping it. |
+| `plugin_build <plugin.json>\|all` | Compile a plugin into a browser-playable AudioWorklet. |
 
 `run` changes the prompt **in memory only** — the saved workflow file is untouched.
 
@@ -139,6 +142,29 @@ Each project folder gets its own `README.md` automatically — do not hand-write
 `project_publish` without `create` only writes a local git snapshot (safe, offline).
 It creates a real repository on their GitHub account — run it with `create=true` **only
 when they have said "put it on GitHub"** (the GUI's Publish button asks them first).
+
+## Plugins — audio effects that actually run
+
+The studio can compile a **plugin definition** into a real audio effect that plays in
+the browser. A definition is a JSON file with ports, parameters (sliders), and a
+`source.code` block that describes the signal chain with a small graph language
+(`g.biquad`, `g.tanh`, `g.lerp`, …). Definitions live in `plugins/`.
+
+| Command | What it does |
+|---|---|
+| `plugin_list` | Which definitions exist and which are already built and playable. |
+| `plugin_test <plugin.json> [input.wav] [seconds=8]` | Renders it offline over a real song and **proves** it works: Mix=0 must be an exact bypass, output must stay finite at the most extreme settings. |
+| `plugin_build <plugin.json>\|all [demo=<wav>]` | Compiles it into a browser AudioWorklet under `public/plugins/`. |
+
+Always `plugin_test` before `plugin_build`. A failing check means do not ship it.
+After a build, point them at **Plugins** in the top bar (or
+`http://127.0.0.1:7860/plugin.html`) — sliders are live while the song loops, and
+**Export WAV** renders the processed file.
+
+To write a new definition, copy `plugins/Stem_Instrument_Repair.json` as a template:
+keep the `ports`/`parameters` shape, and write `build(g, config)` in `source.code`.
+Every parameter name you declare must be read with `g.input("<exact name>")`, and the
+graph must end in `g.output("audioOutL", …)` and `g.output("audioOutR", …)`.
 
 ## Style of reply
 

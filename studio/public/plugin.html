@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plugin Host — AI Studio</title>
+<style>
+:root{
+  --bg:#0a0d14;--bg2:#0e1219;--panel:#121722;--panel2:#161d2b;--line:#232c3d;--line2:#2e3a50;
+  --txt:#e6ecf7;--txt2:#94a3bb;--txt3:#5f6f88;--acc:#5b8cff;--acc2:#8b5cf6;
+  --ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--r:14px;--r2:9px;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 var(--mono)}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--bg2)}
+h1{font-size:15px;margin:0;font-weight:600}
+h1 span{color:var(--acc)}
+a.back{color:var(--txt2);text-decoration:none;font-size:12px}
+a.back:hover{color:var(--acc)}
+main{max-width:880px;margin:0 auto;padding:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+label.small{color:var(--txt2);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+select,button,input[type=file]{font:13px var(--mono);background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:var(--r2);padding:8px 12px}
+button{cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:#041024;font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+button:disabled{opacity:.45;cursor:not-allowed}
+#desc{color:var(--txt2);font-size:12px;margin:10px 0 0}
+.params{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:700px){.params{grid-template-columns:1fr 1fr}}
+.param{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px}
+.param .top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}
+.param .top .nm{color:var(--txt)}
+.param .top .val{color:var(--acc)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+#status{font-size:12px;color:var(--txt2);min-height:18px}
+#status.ok{color:var(--ok)}#status.err{color:var(--err)}#status.busy{color:var(--warn)}
+.meter{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:10px}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .06s linear}
+</style>
+</head>
+<body>
+<header>
+  <h1>Plugin <span>Host</span></h1>
+  <a class="back" href="/">← back to studio</a>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <label class="small" for="sel">Effect</label>
+      <select id="sel"></select>
+      <button id="play" class="primary" disabled>▶ Play</button>
+      <button id="stop" disabled>■ Stop</button>
+      <button id="export" disabled>⬇ Export WAV</button>
+      <label for="file" style="margin-left:auto"><input type="file" id="file" accept="audio/*" style="display:none">📁 Load audio…</label>
+      <button id="demo" disabled>Use demo song</button>
+    </div>
+    <p id="desc"></p>
+    <div class="meter"><i id="meter"></i></div>
+  </div>
+  <div class="card">
+    <label class="small">Controls</label>
+    <div class="params" id="params"></div>
+  </div>
+  <div class="card"><div id="status">Loading plugin list…</div></div>
+</main>
+<script src="/plugin.js"></script>
+</body>
+</html>

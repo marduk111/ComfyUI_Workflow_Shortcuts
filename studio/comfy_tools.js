@@ -9,6 +9,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 
 const COMFY = process.env.COMFY_URL || "http://127.0.0.1:8188";
 const ROOT = path.resolve(__dirname, "..");
@@ -520,6 +521,65 @@ const TOOLS = {
       return projects.publish(a);
     },
   },
+
+  plugin_build: {
+    description: "Compile a plugin definition (JSON + g.* DSP graph) into a browser AudioWorklet under public/plugins/.",
+    args: '<plugin.json>|all [demo=<audio.wav>]',
+    async run(a) {
+      const target = a.workflow || a._pos || "all";
+      const args = [path.join(__dirname, "plugins", "build.js"), target];
+      if (a.demo) args.push("demo=" + a.demo);
+      const r = await runNodeJson(args);
+      if (r.error) return r;
+      if (r.built && r.built.length) r.hint = `Try it: ${r.built[0].url}`;
+      return r;
+    },
+  },
+
+  plugin_list: {
+    description: "List compiled plugins the browser can play, and plugin definitions on disk.",
+    async run() {
+      const defs = fs.existsSync(path.join(ROOT, "plugins"))
+        ? fs.readdirSync(path.join(ROOT, "plugins")).filter((f) => f.endsWith(".json"))
+        : [];
+      let built = [];
+      try { built = JSON.parse(fs.readFileSync(path.join(__dirname, "public", "plugins", "index.json"), "utf8")).plugins || []; }
+      catch { built = []; }
+      return { definitions: defs, built, host: "http://127.0.0.1:7860/plugin.html" };
+    },
+  },
+
+  plugin_test: {
+    description: "Render a plugin's DSP graph offline over a WAV and verify it (bypass, finiteness, real change).",
+    args: '<plugin.json> [input.wav] [seconds=8]',
+    async run(a) {
+      const target = a.workflow || a._pos;
+      if (!target) return { error: "plugin file required, e.g. plugin_test plugins/Stem_Instrument_Repair.json" };
+      const args = [path.join(__dirname, "plugins", "test_render.js"), target];
+      if (a.input) args.push(a.input);
+      if (a.seconds) args.push(String(a.seconds));
+      const r = await runNodeJson(args);
+      if (r.error) return r;
+      r.hint = r.status === "pass"
+        ? "Verified. Every check passed; safe to plugin_build and play in the browser."
+        : "FAILED a check — do not ship this build.";
+      return r;
+    },
+  },
 };
+
+// Run a studio script that prints one JSON object, and hand back that object.
+// Exit code 3 means the script reported a failed check, not a crash.
+function runNodeJson(args) {
+  return new Promise((resolve) => {
+    execFile(process.execPath, args, { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const out = (stdout || "").trim();
+      let parsed = null;
+      try { parsed = JSON.parse(out); } catch {}
+      if (parsed) return resolve(parsed);
+      resolve({ error: (err ? err.message + " — " : "") + (out || stderr || "no output").slice(0, 600) });
+    });
+  });
+}
 
 module.exports = { TOOLS, comfy, listWorkflowFiles, setPrompt, setImage, loadObjectInfo, ROOT, INPUT_DIR, OUTPUT_DIR, CLIENT_ID, projects };

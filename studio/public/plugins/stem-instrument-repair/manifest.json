@@ -1,0 +1,315 @@
+{
+  "id": "stem-instrument-repair",
+  "kind": "effect",
+  "displayName": "Stem Instrument Repair",
+  "description": "A conventional stem-cleanup effect that focuses broad instrument body, reduces competing bleed emphasis, smooths uneven dynamics while retaining attacks, and adds restrained continuity saturation. It does not perform source separation, neural instrument recognition, pitch correction, or spectral reconstruction.",
+  "processorName": "plugin_stem_instrument_repair",
+  "sampleRate": 48000,
+  "parameters": [
+    {
+      "name": "Dynamics Smooth",
+      "audioName": "p_Dynamics_Smooth",
+      "label": "Smooth",
+      "default": 0.35,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    },
+    {
+      "name": "Instrument Focus",
+      "audioName": "p_Instrument_Focus",
+      "label": "Focus",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    },
+    {
+      "name": "Mix",
+      "audioName": "p_Mix",
+      "label": "Mix",
+      "default": 0.6,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    },
+    {
+      "name": "Repair Amount",
+      "audioName": "p_Repair_Amount",
+      "label": "Repair",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    },
+    {
+      "name": "Saturation",
+      "audioName": "p_Saturation",
+      "label": "Sat",
+      "default": 0.25,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    },
+    {
+      "name": "Separation",
+      "audioName": "p_Separation",
+      "label": "Separate",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    },
+    {
+      "name": "Transient Preserve",
+      "audioName": "p_Transient_Preserve",
+      "label": "Transients",
+      "default": 0.45,
+      "min": 0,
+      "max": 1,
+      "unit": "percent",
+      "scale": "linear"
+    }
+  ],
+  "outputs": [
+    "audioOutL",
+    "audioOutR"
+  ],
+  "nodeCount": 98,
+  "stateFloats": 20,
+  "ui": {
+    "compact": {
+      "type": "box",
+      "width": {
+        "unit": "gr",
+        "value": 16
+      },
+      "height": {
+        "value": 5,
+        "unit": "gr"
+      },
+      "children": [
+        {
+          "y": 0,
+          "x": 0,
+          "h": 5,
+          "widget": {
+            "background": "raised",
+            "width": {
+              "value": 5,
+              "unit": "gr"
+            },
+            "height": {
+              "unit": "gr",
+              "value": 5
+            },
+            "header": {
+              "title": "FOCUS"
+            },
+            "type": "box",
+            "children": [
+              {
+                "w": 2,
+                "widget": {
+                  "paramName": "Instrument Focus",
+                  "label": "Focus",
+                  "type": "knob",
+                  "variant": "value"
+                },
+                "x": 0,
+                "h": 2,
+                "y": 1
+              },
+              {
+                "widget": {
+                  "variant": "value",
+                  "paramName": "Separation",
+                  "label": "Separate",
+                  "type": "knob"
+                },
+                "w": 2,
+                "y": 1,
+                "x": 2,
+                "h": 2
+              },
+              {
+                "y": 3,
+                "w": 4,
+                "widget": {
+                  "type": "label",
+                  "text": "Focus body; increase Separate for bleed."
+                },
+                "x": 0,
+                "h": 1
+              },
+              {
+                "y": 4,
+                "h": 1,
+                "x": 0,
+                "widget": {
+                  "type": "label",
+                  "text": "Instr: set Focus where the stem speaks."
+                },
+                "w": 4
+              }
+            ]
+          },
+          "w": 5
+        },
+        {
+          "x": 5,
+          "w": 8,
+          "widget": {
+            "height": {
+              "unit": "gr",
+              "value": 5
+            },
+            "type": "box",
+            "header": {
+              "title": "REPAIR"
+            },
+            "background": "raised",
+            "children": [
+              {
+                "widget": {
+                  "variant": "value",
+                  "paramName": "Repair Amount",
+                  "label": "Repair",
+                  "type": "knob"
+                },
+                "w": 2,
+                "y": 1,
+                "x": 0,
+                "h": 2
+              },
+              {
+                "h": 2,
+                "x": 2,
+                "y": 1,
+                "w": 2,
+                "widget": {
+                  "label": "Smooth",
+                  "paramName": "Dynamics Smooth",
+                  "variant": "value",
+                  "type": "knob"
+                }
+              },
+              {
+                "widget": {
+                  "type": "knob",
+                  "paramName": "Transient Preserve",
+                  "label": "Trans",
+                  "variant": "value"
+                },
+                "w": 2,
+                "h": 2,
+                "y": 1,
+                "x": 4
+              },
+              {
+                "w": 2,
+                "y": 1,
+                "x": 6,
+                "h": 2,
+                "widget": {
+                  "variant": "value",
+                  "type": "knob",
+                  "paramName": "Saturation",
+                  "label": "Sat"
+                }
+              },
+              {
+                "h": 1,
+                "y": 3,
+                "x": 0,
+                "widget": {
+                  "type": "label",
+                  "text": "Repair joins fragments; Smooth steadies; Trans restores attacks."
+                },
+                "w": 8
+              },
+              {
+                "widget": {
+                  "text": "Instr: raise gradually; stop before pumping or grit.",
+                  "type": "label"
+                },
+                "h": 1,
+                "y": 4,
+                "w": 8,
+                "x": 0
+              }
+            ],
+            "width": {
+              "value": 8,
+              "unit": "gr"
+            }
+          },
+          "h": 5,
+          "y": 0
+        },
+        {
+          "x": 13,
+          "y": 0,
+          "h": 5,
+          "w": 3,
+          "widget": {
+            "header": {
+              "title": "OUT"
+            },
+            "background": "raised",
+            "height": {
+              "value": 5,
+              "unit": "gr"
+            },
+            "type": "box",
+            "children": [
+              {
+                "y": 1,
+                "widget": {
+                  "variant": "value",
+                  "type": "knob",
+                  "paramName": "Mix",
+                  "label": "Mix"
+                },
+                "h": 2,
+                "x": 0,
+                "w": 2
+              },
+              {
+                "h": 1,
+                "widget": {
+                  "text": "Blend",
+                  "type": "label"
+                },
+                "w": 3,
+                "x": 0,
+                "y": 3
+              },
+              {
+                "x": 0,
+                "y": 4,
+                "w": 3,
+                "h": 1,
+                "widget": {
+                  "type": "label",
+                  "text": "Instr: A/B wet."
+                }
+              }
+            ],
+            "width": {
+              "unit": "gr",
+              "value": 3
+            }
+          }
+        }
+      ]
+    }
+  },
+  "builtAt": "2026-10-10T04:56:40.465Z"
+}

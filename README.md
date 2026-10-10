@@ -65,6 +65,21 @@ Under the hood this uses the free open-source **Hybrid Demucs** stem separator
 (~320 MB, downloaded once and cached) running on your own graphics card — nothing
 is uploaded anywhere.
 
+### Plugins — audio effects you can play
+
+The studio can also turn a **plugin definition** (a small JSON file describing
+sliders and a signal chain) into a working audio effect that runs in your browser.
+Click **Plugins** in the top bar to open the host: pick an effect, press Play, and
+move the sliders while the song loops. **Export WAV** gives you the processed file.
+
+Before anything is built it is *proven* first: the studio renders the effect over a
+real song and checks that muting the effect is an exact copy of the original and that
+nothing blows up at the most extreme settings. Only then does it become playable.
+
+Definitions live in `plugins/` (currently `Stem_Instrument_Repair.json`, a stem
+cleanup effect with 7 controls). The AI can write new ones on request — describe the
+sound you want and it can produce a definition, test it, and build it.
+
 ### How long things take
 
 | What | Roughly |
@@ -97,6 +112,11 @@ is uploaded anywhere.
 | `studio/comfy_tools.js` | The operations behind that CLI |
 | `studio/projects.js` | One folder per project: assets, workflows, results |
 | `studio/convert.js` | Turns these visual workflows into API payloads |
+| `studio/plugins/graph.js` | DSP graph engine (same code runs offline and in the browser) |
+| `studio/plugins/build.js` | Compiles a plugin definition into a browser AudioWorklet |
+| `studio/plugins/test_render.js` | Proves a plugin works before it is built |
+| `plugins/` | Audio effect definitions (JSON + signal-chain code) |
+| `studio/public/plugin.html` | The plugin host page (sliders + play + export) |
 | `studio/mcp-comfyui.js` | MCP front door for the same operations |
 | `studio/public/` | The browser interface |
 | `projects/` | Your project folders (created as you make them) |

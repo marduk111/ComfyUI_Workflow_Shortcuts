@@ -9,3 +9,6 @@ node_modules/
 *.log
 Thumbs.db
 .DS_Store
+# plugin test renders and the demo clip (regenerate with test_render.js)
+studio/public/plugins/out/
+studio/public/plugins/demo.wav
