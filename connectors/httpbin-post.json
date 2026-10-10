@@ -1,0 +1,20 @@
+{
+  "id": "httpbin-post",
+  "name": "httpbin echo",
+  "baseUrl": "https://httpbin.org",
+  "requiresLogin": false,
+  "steps": [
+    {
+      "method": "POST",
+      "path": "/post",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "hello": "{{name}}"
+      }
+    }
+  ],
+  "notes": "Test connector � echoes the body back.",
+  "savedAt": "2026-10-10T07:53:59.736Z"
+}

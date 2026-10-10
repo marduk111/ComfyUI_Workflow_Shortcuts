@@ -96,6 +96,7 @@ The AI draws from a pool of resources it can check at any time:
 | Hugging Face | Thousands of ready-made AI models to download |
 | GitHub | Public repos to borrow working code from |
 | ffmpeg / Python | Media conversion (the `media` command) and scripting |
+| Web bridge | A real browser (your logged-in Edge) + saved API recipes from sites |
 | opencode | The AI itself — the brain talking to you in the chat |
 
 So when you say "I need a tool that does X", the AI can search Hugging Face for a
@@ -104,6 +105,18 @@ register the result as a new app — all on this machine, nothing uploaded. **It
 downloads models or clones repos after you ask for it** (you'll see a "confirm"
 message first). Two examples already exist: **Song Stats** (reads a WAV and reports
 loudness) and **Track Namer** (asks a local model to name your track from a mood).
+
+### Websites as tools
+
+The AI can open a real browser window (your Edge, with your logins) and use websites
+for you — look things up, read pages, click around. Better still, it can **learn a
+site's own API**: watch the calls a site makes when you press a button, save that as a
+recipe (a "connector"), and call it directly next time — no browser, no clicking.
+It also wraps local analysis tools: **Mix Doctor** checks a song's BPM, key, loudness
+and mix problems by wrapping the Suno Bridge analyzer from your Desktop.
+
+**Safety:** the browser is your real session. The AI will not submit purchases, delete
+things, or post publicly unless you explicitly ask for that exact action.
 
 ### How long things take
 
@@ -143,7 +156,10 @@ loudness) and **Track Namer** (asks a local model to name your track from a mood
 | `plugins/` | Audio effect definitions (JSON + signal-chain code) |
 | `studio/public/plugin.html` | The plugin host page (sliders + play + export) |
 | `studio/apps.js` | App registry — tools/agents the AI builds on request |
-| `studio/capabilities.js` | The pool: ComfyUI, Ollama, Hermes, Hugging Face, GitHub, ffmpeg, Python |
+| `studio/capabilities.js` | The pool: ComfyUI, Ollama, Hermes, Hugging Face, GitHub, ffmpeg, Python, web bridge |
+| `studio/browser.js` | Real-browser bridge: open/read/click/type sites, record their API calls |
+| `studio/connectors.js` | Saved API recipes — reverse-engineered sites called as tools |
+| `connectors/` | The saved recipes (each a small JSON file) |
 | `apps/` | Apps the AI has built (each with its own run.js and manifest) |
 | `studio/mcp-comfyui.js` | MCP front door for the same operations |
 | `studio/public/` | The browser interface |

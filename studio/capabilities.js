@@ -242,6 +242,26 @@ async function opencode() {
   };
 }
 
+// The studio's hands on the outside web: a real Edge browser with the
+// human's logins, plus a registry of reverse-engineered API recipes.
+async function webBridge() {
+  const exe = process.platform === "win32"
+    ? ["C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+       "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"].find((p) => fs.existsSync(p))
+    : null;
+  let playwright = false;
+  try { require.resolve("playwright-core"); playwright = true; } catch {}
+  let connectors = 0;
+  try { connectors = fs.readdirSync(path.join(__dirname, "..", "connectors")).filter((f) => f.endsWith(".json")).length; } catch {}
+  const up = await probe(`http://127.0.0.1:7860/api/connectors`, 1500).catch(() => false);
+  return {
+    id: "web-bridge", name: "Web bridge (browser + connectors)", ready: !!exe && playwright,
+    what: "Use real websites as the logged-in human: open, click, read, screenshot — and record a site's API calls to reuse them directly.",
+    use: 'node studio/studio.js web action=goto url="https://..."   then inspect/read/click/harvest',
+    detail: { edge: exe || null, playwright, connectors, serverRoute: up ? "up" : "server may need a restart" },
+  };
+}
+
 // ---------- pool assembly ----------
 
 async function pool(opts = {}) {
@@ -255,7 +275,7 @@ async function pool(opts = {}) {
   const ollamaProbe = await ollama();
   const caps = await Promise.all([
     comfyui(), Promise.resolve(ollamaProbe), hermes(ollamaProbe),
-    huggingface(), github(), ffmpegCap(), pythonCap(), comfyNodes(), opencode(),
+    huggingface(), github(), ffmpegCap(), pythonCap(), comfyNodes(), opencode(), webBridge(),
   ]);
   const out = {
     generatedAt: new Date().toISOString(),

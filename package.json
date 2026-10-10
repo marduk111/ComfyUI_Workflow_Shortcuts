@@ -1,0 +1,8 @@
+{
+  "name": "ai-studio",
+  "private": true,
+  "description": "Local AI studio — ComfyUI GUI, app registry, capability pool, external tool bridge",
+  "dependencies": {
+    "playwright-core": "^1.57.0"
+  }
+}

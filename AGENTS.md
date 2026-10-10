@@ -41,6 +41,12 @@ permission popup. Every other `bash` call will, so prefer this one.
 | `gh action=search query="..." [minStars=50]` | Search GitHub for a repo to borrow from. |
 | `gh action=clone repo="owner/name" confirm=true` | Clone a GitHub repo into `vendor/`. **Needs confirm=true.** |
 | `media action=convert input="a.wav" output="a.mp3"` | ffmpeg: `convert`, `cut` (start/end, MM:SS ok), `join` (inputs="a,b"). |
+| `web action=goto url="https://..."` | Open a site in the studio's real browser (the human's logged-in Edge). |
+| `web action=inspect` / `read` / `click` / `type` / `screenshot` | See and operate the page. Selectors: CSS, or `text=Words` for buttons/links. |
+| `web action=harvest on` … `harvest_log` | Record every API call a site makes — reverse engineer it. |
+| `web action=fetch url=... method=POST body="{}"` | Call an API from inside the page (uses the human's login). |
+| `connectors` | Saved recipes for calling outside services directly. |
+| `connector_save id=... steps='[...]'` / `connector_call id=... key=value` | Save a reverse-engineered API, then call it like a tool. |
 | `apps` | Every app/agent registered in the studio. |
 | `app_new name="..." kind=agent [runType=python]` | Register a new app. Creates `apps/<id>/` with a run.js (or run.py) stub. |
 | `app_run id=<app-id>` | Run a registered app. It prints one JSON object. |
@@ -224,6 +230,57 @@ from the dropdown automatically.
 
 Two working examples to copy from: `apps/song-stats` (plain tool, reads a WAV) and
 `apps/track-namer` (agent, calls a local Ollama model). Do not delete them.
+
+**Wrap existing local tools too.** Other projects on this machine can become apps without
+rewriting them — `apps/mix-doctor` wraps the Suno Bridge analyzer on the Desktop
+(`~\OneDrive\Desktop\suno-bridge`): `app_run id=mix-doctor file="song.wav"` returns BPM,
+key, LUFS and severity-tagged mix problems. If they point you at another script or
+project folder, scaffold an app whose `run.py`/`run.js` imports or shells out to it.
+
+## Websites as tools — browse, reverse engineer, connect
+
+The studio has a real browser (the human's Edge, with their logins) and a connector
+registry. This is how you turn a website into a tool.
+
+**Just use a site for them** (look something up, check a page):
+
+```
+node studio/studio.js web action=goto url="https://..."
+node studio/studio.js web action=inspect          # what's on the page
+node studio/studio.js web action=read             # the page's text
+node studio/studio.js web action=click selector="text=Download"
+node studio/studio.js web action=screenshot       # returns /shots/....png
+```
+
+**Reverse engineer a site** — learn the API its buttons call, then call it directly
+forever after (no clicking):
+
+1. `web action=goto url="https://site.com"` — if a login is needed, tell the human to
+   log in **in the browser window that just opened**. The session is kept.
+2. `web action=harvest on` — recording starts.
+3. Do the thing on the site that you want to automate (`click`, `type`, …).
+4. `web action=harvest off` then `web action=harvest_log` — you get every XHR/fetch:
+   method, URL, headers, body, response.
+5. Pick the interesting call and save it:
+   `connector_save id=my-site baseUrl="https://site.com" steps='[{"method":"POST","path":"/api/generate","headers":{},"body":{"prompt":"{{prompt}}"}}]'`
+   (shell quoting is painful? write the steps JSON to a file and pass `stepsFile="recipe.json"`.)
+6. `connector_call id=my-site prompt="..."` — runs it. If the connector has
+   `requiresLogin=true`, the call goes through the browser's session automatically —
+   no passwords, no tokens in files.
+
+**Safety rules for the browser** — this is the human's real logged-in session:
+
+- Never submit forms that spend money, delete things, or post publicly unless the human
+  explicitly asked for that exact action in this conversation.
+- Never read or exfiltrate cookies, passwords or tokens. `web action=cookies` exists for
+  building connectors on the same machine — do not print full cookie values in chat.
+- If a site asks "are you sure?" and the action is destructive, stop and ask the human.
+
+**Reverse engineering desktop software** follows the same spirit: first look for a CLI,
+a local HTTP server (many apps have one — ComfyUI on :8188, Ollama on :11434), a config
+file, or a documented file format. Wrap what you find as an app (`app_new` +
+`run.js`/`run.py` that shells out). Only reach for screen-level automation if there is
+no better seam.
 
 ## Style of reply
 

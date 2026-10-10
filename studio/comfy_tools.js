@@ -25,6 +25,7 @@ const { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes,
 const projects = require("./projects.js");
 const apps = require("./apps.js");
 const capabilities = require("./capabilities.js");
+const connectors = require("./connectors.js");
 
 let specIndex = null;
 let objectInfo = null;
@@ -636,6 +637,129 @@ const TOOLS = {
       let size = null;
       try { size = fs.statSync(a.output).size; } catch {}
       return { ok: true, action, output: a.output, bytes: size, note: action === "join" ? "join uses stream copy — inputs must share the same format" : undefined };
+    },
+  },
+
+  // ---------- web: the studio's hands on websites ----------
+
+  web: {
+    description: "Drive a real browser (the human's logged-in Edge session). Open sites, read them, click, type, screenshot — and record a site's own API calls to reverse engineer it.",
+    args: 'action=goto url="https://..." | inspect | read [selector=...] | click selector="text=Send" | type selector="#q" text="hi" [submit=true] | screenshot | harvest on|off | harvest_log | cookies domain=... | fetch url=... method=POST body="{}" | status | close',
+    async run(a) {
+      const action = a.action || a._pos || "status";
+      // The browser lives inside the long-lived studio server so logins and
+      // pages survive between CLI calls. Forward over local HTTP.
+      const STUDIO_URL = process.env.STUDIO_URL || "http://127.0.0.1:7860";
+      try {
+        const res = await fetch(`${STUDIO_URL}/api/web`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...a, action }),
+        });
+        const body = await res.json();
+        if (action === "goto" && body.ok) body.hint = `Use action=inspect to see what's on the page, action=read to get its text.`;
+        if (action === "harvest" && (a.mode === "on" || a._pos === "on")) {
+          body.hint = "Now do the thing on the site (click/type), then run web action=harvest_log to see every API call it made.";
+        }
+        return body;
+      } catch (e) {
+        return { error: "Studio server not reachable at " + STUDIO_URL + " — it must be running for web actions. (" + e.message + ")" };
+      }
+    },
+  },
+
+  // ---------- connectors: saved reverse-engineered API recipes ----------
+
+  connectors: {
+    description: "List saved connectors — recipes for calling outside services directly (learned by reverse engineering their websites).",
+    async run() {
+      const list = connectors.list();
+      return {
+        connectors: list,
+        hint: list.length
+          ? "Call one: node studio/studio.js connector_call id=<id> key=value"
+          : "None yet. Reverse engineer a site: web action=goto url=... , web action=harvest on, use the site, web action=harvest_log, then connector_save.",
+      };
+    },
+  },
+
+  connector_save: {
+    description: "Save a reverse-engineered API recipe as a connector so it can be called directly next time.",
+    args: 'id="suno-create" name="..." baseUrl="https://..." [requiresLogin=true] steps=\'[{"method":"POST","path":"/api/x","headers":{},"body":{"prompt":"{{prompt}}"}}]\' [stepsFile="recipe.json"] [notes="..."]',
+    async run(a) {
+      let steps = a.steps;
+      // stepsFile avoids shell-quoting pain: point at a JSON file instead.
+      if (!steps && a.stepsFile) {
+        try { steps = JSON.parse(fs.readFileSync(a.stepsFile, "utf8")); }
+        catch (e) { return { error: `Could not read stepsFile: ${e.message}` }; }
+      }
+      if (typeof steps === "string") {
+        try { steps = JSON.parse(steps); } catch (e) { return { error: "steps must be valid JSON: " + e.message }; }
+      }
+      return connectors.save({ ...a, steps });
+    },
+  },
+
+  connector_remove: {
+    description: "Delete a saved connector.",
+    args: "id=<connector-id>",
+    async run(a) {
+      return connectors.remove(a.id || a._pos);
+    },
+  },
+
+  connector_call: {
+    description: "Call an outside service through a saved connector. {{placeholders}} in the recipe come from your key=value args. If the connector needs a login, the call goes through the studio browser's session.",
+    args: 'id=<connector-id> [step=1] [key=value ...]',
+    async run(a) {
+      const id = a.id || a._pos;
+      if (!id) return { error: "id is required. List them with: connectors" };
+      const c = connectors.get(id);
+      if (!c) return { error: `No connector named "${id}". List them with: connectors` };
+      const stepIdx = Math.max(0, (Number(a.step) || 1) - 1);
+      const step = (c.steps || [])[stepIdx];
+      if (!step) return { error: `Connector "${id}" has no step ${stepIdx + 1} (it has ${(c.steps || []).length}).` };
+
+      const args = { ...a };
+      delete args.id; delete args.step; delete args._pos; delete args.workflow; delete args.confirm;
+      const missingKeys = connectors.missing(step, args);
+      if (missingKeys.length) {
+        return { error: `Missing values for: ${missingKeys.join(", ")} — pass them as key=value.` };
+      }
+      const method = (step.method || "GET").toUpperCase();
+      const url = new URL(connectors.fill(step.path, args), c.baseUrl || undefined).toString();
+      const headers = connectors.fill(step.headers || {}, args);
+      const body = step.body != null ? connectors.fill(step.body, args) : null;
+
+      if (c.requiresLogin) {
+        // Run inside the logged-in browser session via the studio server —
+        // no token handling here, and the same profile the human uses.
+        const STUDIO_URL = process.env.STUDIO_URL || "http://127.0.0.1:7860";
+        try {
+          const res = await fetch(`${STUDIO_URL}/api/web`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "fetch", url, method, headers,
+              body: body != null ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined,
+            }),
+          });
+          return res.json();
+        } catch (e) {
+          return { error: "This connector needs the studio browser (login session), but the studio server is not reachable at " + STUDIO_URL + ". (" + e.message + ")" };
+        }
+      }
+      try {
+        const init = { method, headers: { "Content-Type": "application/json", ...headers } };
+        if (body != null && method !== "GET" && method !== "HEAD") init.body = typeof body === "string" ? body : JSON.stringify(body);
+        const res = await fetch(url, init);
+        const text = await res.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch { parsed = undefined; }
+        return { ok: res.ok, status: res.status, url, body: parsed !== undefined ? parsed : text.slice(0, 8000) };
+      } catch (e) {
+        return { error: `Call failed: ${e.message}` };
+      }
     },
   },
 

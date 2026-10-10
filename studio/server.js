@@ -20,6 +20,8 @@ const { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes,
 const projects = require("./projects.js");
 const apps = require("./apps.js");
 const capabilities = require("./capabilities.js");
+const browser = require("./browser.js");
+const connectors = require("./connectors.js");
 
 const PORT = Number(process.env.STUDIO_PORT || 7860);
 // opencode serve must be launched with ROOT as its working directory, otherwise
@@ -868,6 +870,26 @@ const server = http.createServer(async (req, res) => {
       // ?fresh=1 forces a re-probe.
       const pool = await capabilities.pool({ fresh: url.searchParams.get("fresh") === "1" });
       return json(res, 200, pool);
+    }
+
+    // ---- browser bridge: the AI's hands on websites ----
+    if (p === "/api/web" && req.method === "POST") {
+      const body = await readBody(req, 256 * 1024).then((b) => JSON.parse(b || "{}")).catch(() => ({}));
+      const r = await browser.run(body.action, body);
+      return json(res, r && r.error && !r.available ? 400 : 200, r);
+    }
+    if (p === "/api/connectors" && req.method === "GET") {
+      return json(res, 200, { connectors: connectors.list() });
+    }
+    if (p === "/api/connectors" && req.method === "POST") {
+      const body = await readBody(req, 256 * 1024).then((b) => JSON.parse(b || "{}")).catch(() => ({}));
+      const r = connectors.save(body);
+      return json(res, r.error ? 400 : 200, r);
+    }
+    // browser screenshots, served back to the GUI / the agent
+    if (p.startsWith("/shots/")) {
+      const name = path.basename(p.slice("/shots/".length));
+      return serveFile(res, path.join(browser.SHOTS, name));
     }
 
     // ---- static GUI ----

@@ -1,0 +1,19 @@
+{
+  "id": "mix-doctor",
+  "name": "Mix Doctor",
+  "kind": "tool",
+  "description": "Checks a song: BPM, key, loudness, mix problems — a mastering pre-flight report.",
+  "source": {
+    "type": "local",
+    "ref": "",
+    "url": ""
+  },
+  "run": {
+    "type": "python",
+    "entry": "run.py",
+    "timeoutMs": 600000
+  },
+  "inputs": [],
+  "createdAt": "2026-10-10T07:31:02.542Z",
+  "createdBy": "agent"
+}
