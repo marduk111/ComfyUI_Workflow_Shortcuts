@@ -95,13 +95,15 @@ The AI draws from a pool of resources it can check at any time:
 | Hermes | A strong local reasoning model for planning and code |
 | Hugging Face | Thousands of ready-made AI models to download |
 | GitHub | Public repos to borrow working code from |
-| ffmpeg / Python | Media conversion and scripting |
+| ffmpeg / Python | Media conversion (the `media` command) and scripting |
+| opencode | The AI itself — the brain talking to you in the chat |
 
 So when you say "I need a tool that does X", the AI can search Hugging Face for a
 model, clone a GitHub repo for the glue code, wire it to a local Ollama brain, and
-register the result as a new app — all on this machine, nothing uploaded. Two examples
-already exist: **Song Stats** (reads a WAV and reports loudness) and **Track Namer**
-(asks a local model to name your track from a mood).
+register the result as a new app — all on this machine, nothing uploaded. **It only
+downloads models or clones repos after you ask for it** (you'll see a "confirm"
+message first). Two examples already exist: **Song Stats** (reads a WAV and reports
+loudness) and **Track Namer** (asks a local model to name your track from a mood).
 
 ### How long things take
 

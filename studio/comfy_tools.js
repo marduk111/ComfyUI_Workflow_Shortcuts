@@ -579,12 +579,63 @@ const TOOLS = {
   },
 
   pool_get: {
-    description: "Download/fetch a capability on request (Hermes model, a Hugging Face model).",
-    args: 'capability=hermes  |  capability=huggingface-model model="<owner>/<name>"',
+    description: "Download/fetch a capability on request (Hermes model, a Hugging Face model). Heavy downloads — only when the user asked for it.",
+    args: 'capability=hermes  |  capability=huggingface-model model="<owner>/<name>"  [confirm=true]',
     async run(a) {
       const id = a.capability || a._pos;
       if (!id) return { error: "Tell me what to fetch: capability=hermes or capability=huggingface-model model=..." };
+      // Safety gate: these pull multi-GB files. The agent must have heard the
+      // user ask for it — the human confirms with a word, then re-run with confirm=true.
+      if (a.confirm !== true && a.confirm !== "true") {
+        return {
+          needConfirm: true,
+          error: `Fetching "${id}" downloads a large model. Only do this if the user asked for it. Re-run with confirm=true.`,
+        };
+      }
       return capabilities.get(id, a);
+    },
+  },
+
+  media: {
+    description: "Convert, cut or join audio/video files with ffmpeg.",
+    args: 'action=convert input="a.wav" output="a.mp3"  |  action=cut input="song.wav" start=0:12 end=0:40 output="clip.wav"  |  action=join inputs="a.wav,b.wav" output="all.wav"',
+    async run(a) {
+      const ffmpeg = await whichExe("ffmpeg");
+      if (!ffmpeg) return { error: "ffmpeg is not installed." };
+      const action = a.action || "convert";
+      const toSec = (t) => {
+        if (t == null || t === "") return null;
+        const s = String(t);
+        if (s.includes(":")) { const [m, x] = s.split(":").map(Number); return m * 60 + (x || 0); }
+        return Number(s);
+      };
+      let args = [];
+      if (action === "convert") {
+        if (!a.input || !a.output) return { error: "input and output are required" };
+        if (!fs.existsSync(a.input)) return { error: `File not found: ${a.input}` };
+        args = ["-y", "-i", a.input, a.output];
+      } else if (action === "cut") {
+        if (!a.input || !a.output) return { error: "input and output are required" };
+        if (!fs.existsSync(a.input)) return { error: `File not found: ${a.input}` };
+        const start = toSec(a.start) ?? 0, end = toSec(a.end);
+        args = ["-y", "-ss", String(start)];
+        if (end != null) args.push("-to", String(end));
+        args.push("-i", a.input, a.output);
+      } else if (action === "join") {
+        const inputs = String(a.inputs || "").split(",").map((s) => s.trim()).filter(Boolean);
+        if (inputs.length < 2 || !a.output) return { error: 'join needs inputs="a.wav,b.wav" and output' };
+        const listFile = path.join(__dirname, "data", "concat_" + Date.now() + ".txt");
+        fs.mkdirSync(path.dirname(listFile), { recursive: true });
+        fs.writeFileSync(listFile, inputs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join("\n"));
+        args = ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", a.output];
+      } else {
+        return { error: "action must be convert, cut or join" };
+      }
+      const r = await runJsonCmd(ffmpeg, args, 10 * 60 * 1000);
+      if (!r.ok) return { error: (r.err || r.stderr || "ffmpeg failed").slice(-600) };
+      let size = null;
+      try { size = fs.statSync(a.output).size; } catch {}
+      return { ok: true, action, output: a.output, bytes: size, note: action === "join" ? "join uses stream copy — inputs must share the same format" : undefined };
     },
   },
 
@@ -613,16 +664,17 @@ const TOOLS = {
 
   hf: {
     description: "Hugging Face: search for a model, or download one onto this machine.",
-    args: 'action=search query="vocal separation"  |  action=download model="<owner>/<name>"',
+    args: 'action=search query="vocal separation"  |  action=download model="<owner>/<name>" [confirm=true]',
     async run(a) {
       const action = a.action || "search";
-      const which = (exe) => new Promise((res) => {
-        execFile(process.platform === "win32" ? "where" : "which", [exe], { windowsHide: true }, (e, o) => res(e ? null : String(o).split(/\r?\n/)[0].trim()));
-      });
-      const hf = await which("hf");
+      const hf = await whichExe("hf");
       if (!hf) return { error: "The hf tool is not installed." };
       if (action === "download") {
         if (!a.model) return { error: "model id required, e.g. model=openai/whisper-small" };
+        // Large-download gate, same idea as pool_get.
+        if (a.confirm !== true && a.confirm !== "true") {
+          return { needConfirm: true, error: `Downloading "${a.model}" can take gigabytes. Only if the user asked — re-run with confirm=true.` };
+        }
         const dest = a.dest || "D:\\ComfyUI_windows_portable\\ComfyUI\\models\\huggingface";
         fs.mkdirSync(dest, { recursive: true });
         const r = await runJsonCmd(hf, ["download", a.model, "--local-dir", dest], 30 * 60 * 1000);
@@ -643,18 +695,23 @@ const TOOLS = {
 
   gh: {
     description: "GitHub: search public repositories, or clone one to borrow code from.",
-    args: 'action=search query="..."  |  action=clone repo="owner/name" [dir=name]',
+    args: 'action=search query="..." [minStars=50]  |  action=clone repo="owner/name" [dir=name] [confirm=true]',
     async run(a) {
       const action = a.action || "search";
       if (action === "clone") {
         if (!a.repo) return { error: "repo is required, e.g. repo=chrisber/Demucs" };
+        // Cloning pulls an unknown amount of data — same gate as downloads.
+        if (a.confirm !== true && a.confirm !== "true") {
+          return { needConfirm: true, error: `Cloning "${a.repo}" downloads an outside repo. Only if the user asked — re-run with confirm=true.` };
+        }
         const dir = path.join(__dirname, "..", "vendor", a.dir || path.basename(a.repo));
         if (fs.existsSync(dir)) return { ok: true, dir, note: "already cloned" };
         fs.mkdirSync(path.dirname(dir), { recursive: true });
         const r = await runJsonCmd("git", ["clone", "--depth", "1", `https://github.com/${a.repo}.git`, dir], 10 * 60 * 1000);
         return r.ok ? { ok: true, repo: a.repo, dir } : { error: (r.err || r.stderr || "clone failed").slice(0, 500) };
       }
-      const q = encodeURIComponent((a.query || "") + " stars:>50");
+      const stars = Number.isFinite(Number(a.minStars)) ? Number(a.minStars) : 50;
+      const q = encodeURIComponent((a.query || "") + ` stars:>${stars}`);
       const resp = await fetch(`https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=${a.limit || 6}`, {
         headers: { Accept: "application/vnd.github+json", "User-Agent": "ai-studio" },
       });
@@ -693,7 +750,8 @@ const TOOLS = {
     async run(a) {
       const id = a.id || a._pos;
       if (!id) return { error: "id is required. List them with: apps" };
-      const { id: _drop, ...rest } = a;
+      // strip our own plumbing so the app only sees its real arguments
+      const { id: _drop, _pos: _posDrop, workflow: _wf, confirm: _c, ...rest } = a;
       return apps.run(id, rest);
     },
   },
@@ -727,6 +785,14 @@ function runJsonCmd(cmd, args, timeoutMs = 60000) {
     execFile(cmd, args, { cwd: ROOT, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       resolve({ ok: !err, stdout: String(stdout || ""), stderr: String(stderr || ""), err: err ? err.message : null });
     });
+  });
+}
+
+// Full path to an executable on PATH, or null. Shared by hf/media tools.
+function whichExe(exe) {
+  return new Promise((resolve) => {
+    execFile(process.platform === "win32" ? "where" : "which", [exe], { windowsHide: true }, (e, o) =>
+      resolve(e ? null : String(o).split(/\r?\n/)[0].trim()));
   });
 }
 

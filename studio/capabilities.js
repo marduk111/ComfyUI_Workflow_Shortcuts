@@ -22,7 +22,18 @@ const { execFile } = require("child_process");
 
 const COMFY_URL = process.env.COMFY_URL || "http://127.0.0.1:8188";
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
+const OPENCODE_PORT = process.env.OPENCODE_PORT || 4097;
 const COMFY_ROOT = process.env.COMFY_ROOT || "D:\\ComfyUI_windows_portable";
+
+// The pool costs a few network probes and CLI calls to assemble, so results
+// are cached briefly. Both the CLI (`pool`) and the GUI (/api/pool) share
+// this file; pool_get invalidates it after an install.
+const CACHE_FILE = path.join(__dirname, "data", ".pool_cache.json");
+const CACHE_MS = 30000;
+
+function invalidateCache() {
+  try { fs.unlinkSync(CACHE_FILE); } catch {}
+}
 
 function which(exe) {
   return new Promise((resolve) => {
@@ -99,9 +110,10 @@ async function ollama() {
 }
 
 // Hermes is Nous Research's reasoning family. It runs through Ollama, so the
-// pool reports it as its own entry with its own install path.
-async function hermes() {
-  const o = await ollama();
+// pool reports it as its own entry with its own install path. Takes the ollama
+// probe result so pool() only hits /api/tags once.
+async function hermes(ollamaProbe) {
+  const o = ollamaProbe || await ollama();
   const installed = (o.detail && o.detail.hermes) || [];
   return {
     id: "hermes", name: "Hermes (Nous Research)", ready: installed.length > 0,
@@ -208,16 +220,54 @@ async function comfyNodes() {
   };
 }
 
+// The chat brain itself — the model talking to the human through the GUI.
+// Listed so the pool answers "where does the thinking come from" completely.
+// Health check hits /api/health (same endpoint server.js uses). A 401 means
+// the server IS up but requires the studio's basic-auth credentials — count
+// that as ready, since the studio process holds those credentials itself.
+async function opencode() {
+  let up = false;
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 1500);
+    const r = await fetch(`http://127.0.0.1:${OPENCODE_PORT}/api/health`, { signal: ctl.signal });
+    clearTimeout(t);
+    up = r.ok || r.status === 401;
+  } catch { up = false; }
+  return {
+    id: "opencode", name: "opencode (this AI)", ready: up,
+    what: "The assistant chatting with you in the studio window — builds apps, runs tools, plans work.",
+    use: "Just talk to it in the chat box. It can call every other capability here.",
+    detail: { port: OPENCODE_PORT, url: up ? `http://127.0.0.1:${OPENCODE_PORT}` : null },
+  };
+}
+
 // ---------- pool assembly ----------
 
-async function pool() {
-  const caps = await Promise.all([comfyui(), ollama(), hermes(), huggingface(), github(), ffmpegCap(), pythonCap(), comfyNodes()]);
-  return {
+async function pool(opts = {}) {
+  if (!opts.fresh) {
+    try {
+      const st = fs.statSync(CACHE_FILE);
+      if (Date.now() - st.mtimeMs < CACHE_MS) return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+    } catch {}
+  }
+  // one ollama probe feeds both the ollama and hermes entries
+  const ollamaProbe = await ollama();
+  const caps = await Promise.all([
+    comfyui(), Promise.resolve(ollamaProbe), hermes(ollamaProbe),
+    huggingface(), github(), ffmpegCap(), pythonCap(), comfyNodes(), opencode(),
+  ]);
+  const out = {
     generatedAt: new Date().toISOString(),
     readyCount: caps.filter((c) => c.ready).length,
     total: caps.length,
     capabilities: caps,
   };
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(out));
+  } catch {}
+  return out;
 }
 
 // Install / fetch a capability on request. Only a small allowlist —
@@ -231,6 +281,7 @@ async function get(id, opts = {}) {
     if (already.ready) return { ok: true, already: already.detail.installed, hint: "Already available." };
     const r = await runJson(ollama, ["pull", model], 30 * 60 * 1000);
     if (!r.ok) return { error: "Download failed: " + (r.err || r.stderr) };
+    invalidateCache();
     return { ok: true, model, note: "Hermes is ready. Use: node studio/studio.js ask model=" + model + " prompt=\"...\"" };
   }
   if (id === "huggingface-model") {
@@ -242,9 +293,10 @@ async function get(id, opts = {}) {
     fs.mkdirSync(dest, { recursive: true });
     const r = await runJson(hf, ["download", model, "--local-dir", dest], 30 * 60 * 1000);
     if (!r.ok) return { error: "Download failed: " + (r.err || r.stderr) };
+    invalidateCache();
     return { ok: true, model, dest, note: `Saved under ${dest}` };
   }
   return { error: `Nothing to fetch for "${id}". Try: hermes | huggingface-model` };
 }
 
-module.exports = { pool, get };
+module.exports = { pool, get, invalidateCache };

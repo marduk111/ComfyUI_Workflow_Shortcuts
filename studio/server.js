@@ -864,14 +864,9 @@ const server = http.createServer(async (req, res) => {
 
     // ---- capability pool (what the studio can draw from) ----
     if (p === "/api/pool" && req.method === "GET") {
-      // probes hit local services + a few CLIs; cache briefly so the GUI can poll
-      const cacheFile = path.join(DATA, ".pool_cache.json");
-      try {
-        const st = fs.statSync(cacheFile);
-        if (Date.now() - st.mtimeMs < 30000) return json(res, 200, JSON.parse(fs.readFileSync(cacheFile, "utf8")));
-      } catch {}
-      const pool = await capabilities.pool();
-      try { fs.writeFileSync(cacheFile, JSON.stringify(pool)); } catch {}
+      // capabilities.pool() keeps its own 30s file cache shared with the CLI;
+      // ?fresh=1 forces a re-probe.
+      const pool = await capabilities.pool({ fresh: url.searchParams.get("fresh") === "1" });
       return json(res, 200, pool);
     }
 

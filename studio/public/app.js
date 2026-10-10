@@ -1118,9 +1118,10 @@ function bindUI() {
     const builtinBox = $("#apps-builtin"), listBox = $("#apps-list");
 
     function item(entry) {
-      const a = document.createElement(entry.web && entry.web.page ? "a" : "button");
+      const isWeb = !!(entry.web && entry.web.page);
+      const a = document.createElement(isWeb ? "a" : "button");
       a.className = "apps-item";
-      if (entry.web && entry.web.page) { a.href = entry.web.page; a.target = "_blank"; }
+      if (isWeb) { a.href = entry.web.page; a.target = "_blank"; }
       const kind = document.createElement("span");
       kind.className = "kind";
       kind.textContent = entry.kind || "app";
@@ -1129,7 +1130,15 @@ function bindUI() {
       const ds = document.createElement("span");
       ds.className = "ds"; ds.textContent = entry.description || "";
       a.append(kind, nm, ds);
-      if (!entry.web || !entry.web.page) a.title = "Chat-only app — ask the AI to run it";
+      if (!isWeb) {
+        a.title = "Chat-only app — click to ask the AI to run it";
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          pop.classList.add("hidden");
+          $("#msg").value = `Run the ${entry.name} app for me — `;
+          autoGrow(); $("#msg").focus();
+        });
+      }
       return a;
     }
 

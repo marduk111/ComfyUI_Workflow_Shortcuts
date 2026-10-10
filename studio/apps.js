@@ -14,7 +14,8 @@
 //     "inputs": [ { "name": "audio", "label": "Song file", "type": "audio" } ]
 //   }
 //
-// run.js receives one JSON object of arguments as argv[2] and must print one
+// run.js receives one JSON object of arguments as argv[2] (for run.py it is
+// argv[1], since Python's argv[0] is the script itself) and must print one
 // JSON object to stdout. An optional apps/<id>/index.html is served at
 // /apps/<id>/index.html and shows up in the studio's Apps dropdown.
 
@@ -57,21 +58,27 @@ function list() {
     if (!validId(name)) continue;
     const m = readManifest(name);
     if (!m) continue;
-    const page = path.join(dirFor(name), "index.html");
-    out.push({
-      id: name,
-      name: m.name || name,
-      kind: m.kind || "tool",
-      description: m.description || "",
-      source: m.source || null,
-      inputs: m.inputs || [],
-      web: fs.existsSync(page) ? { page: `/apps/${name}/index.html` } : null,
-      run: m.run ? { type: m.run.type || "node", entry: m.run.entry || "run.js" } : null,
-      createdAt: m.createdAt || null,
-      createdBy: m.createdBy || null,
-    });
+    out.push(entryFrom(name, m));
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// One manifest -> one dropdown/CLI entry. Shared by list() and get() so a
+// single app never needs a full directory scan to describe itself.
+function entryFrom(id, m) {
+  const page = path.join(dirFor(id), "index.html");
+  return {
+    id,
+    name: m.name || id,
+    kind: m.kind || "tool",
+    description: m.description || "",
+    source: m.source || null,
+    inputs: m.inputs || [],
+    web: fs.existsSync(page) ? { page: `/apps/${id}/index.html` } : null,
+    run: m.run ? { type: m.run.type || "node", entry: m.run.entry || "run.js" } : null,
+    createdAt: m.createdAt || null,
+    createdBy: m.createdBy || null,
+  };
 }
 
 function listWithBuiltins() {
@@ -81,16 +88,23 @@ function listWithBuiltins() {
 function get(id) {
   if (!validId(id)) return null;
   const m = readManifest(id);
-  if (!m) return null;
-  const all = list();
-  return all.find((a) => a.id === id) || null;
+  return m ? entryFrom(id, m) : null;
 }
 
+// Stubs declare themselves so a test run of an unwritten app is obviously
+// incomplete instead of looking like a working result.
 const STUB_RUN = `"use strict";
-// ${"App runner"} — receives JSON args on argv[2], prints one JSON object.
+// App runner stub — receives JSON args on argv[2], prints one JSON object.
 // Replace this with the real task: call Ollama, ComfyUI, HuggingFace, GitHub…
 const args = JSON.parse(process.argv[2] || "{}");
-console.log(JSON.stringify({ ok: true, received: args, note: "stub — replace run.js with the real logic" }));
+console.log(JSON.stringify({ stub: true, received: args, note: "run.js is still the stub — write the real logic, then app_run again" }));
+`;
+
+const STUB_PY = `import json, sys
+# App runner stub — receives JSON args on argv[1] (Python's argv[0] is the
+# script itself, unlike Node where argv[1] is the script), prints one JSON object.
+args = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
+print(json.dumps({"stub": True, "received": args, "note": "run.py is still the stub — write the real logic, then app_run again"}))
 `;
 
 function create(a = {}) {
@@ -101,6 +115,8 @@ function create(a = {}) {
   fs.mkdirSync(dir, { recursive: true });
 
   const prev = readManifest(id) || {};
+  const runType = a.runType || (prev.run && prev.run.type) || "node";
+  const defaultEntry = runType === "python" ? "run.py" : "run.js";
   const manifest = {
     id,
     name: a.name || prev.name || id,
@@ -110,18 +126,18 @@ function create(a = {}) {
       ? { type: a.sourceType, ref: a.sourceRef || "", url: a.sourceUrl || "" }
       : (prev.source || { type: "local", ref: "", url: "" }),
     run: {
-      type: a.runType || (prev.run && prev.run.type) || "node",
-      entry: a.entry || (prev.run && prev.run.entry) || "run.js",
+      type: runType,
+      entry: a.entry || (prev.run && prev.run.entry) || defaultEntry,
       timeoutMs: a.timeoutMs || (prev.run && prev.run.timeoutMs) || 600000,
     },
-    inputs: prev.inputs || [],
+    inputs: a.inputs || prev.inputs || [],
     createdAt: prev.createdAt || new Date().toISOString(),
     createdBy: prev.createdBy || "agent",
   };
   fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
   const entryPath = path.join(dir, manifest.run.entry);
-  if (!fs.existsSync(entryPath)) fs.writeFileSync(entryPath, STUB_RUN);
+  if (!fs.existsSync(entryPath)) fs.writeFileSync(entryPath, runType === "python" ? STUB_PY : STUB_RUN);
 
   const page = path.join(dir, "index.html");
   return {
@@ -155,7 +171,14 @@ function run(id, args = {}) {
   if (!entry.startsWith(rootApps)) return { error: "runner escaped the app folder" };
   if (!fs.existsSync(entry)) return { error: `${app.run.entry} is missing in apps/${id}/` };
 
-  const runtime = app.run.type === "python" ? "python" : process.execPath;
+  // Prefer the ComfyUI embedded Python (has librosa/soundfile/torch) over a
+  // bare `python` on PATH, which on Windows may be a Store stub.
+  let runtime = process.execPath;
+  if (app.run.type === "python") {
+    runtime = process.env.STUDIO_PYTHON ||
+      path.join("D:\\ComfyUI_windows_portable", "python_embeded", "python.exe");
+    if (!fs.existsSync(runtime)) runtime = "python";
+  }
   const timeout = app.run.timeoutMs || 600000;
   const started = Date.now();
 
@@ -175,6 +198,11 @@ function run(id, args = {}) {
         }
         if (parsed) {
           const res = { app: id, elapsedMs: elapsed, result: parsed };
+          // promote in-script errors so callers (CLI exit code, HTTP status,
+          // agent) see failure the same way as a crash — one signal, not two
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.error) {
+            res.error = parsed.error;
+          }
           if (err && err.killed) res.warning = "hit the time limit";
           if (stderr && String(stderr).trim()) res.stderr = String(stderr).trim().slice(-800);
           return resolve(res);

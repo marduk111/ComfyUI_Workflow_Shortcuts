@@ -34,14 +34,15 @@ permission popup. Every other `bash` call will, so prefer this one.
 | `plugin_test <plugin.json> [input.wav]` | Prove a plugin's DSP graph works before shipping it. |
 | `plugin_build <plugin.json>\|all` | Compile a plugin into a browser-playable AudioWorklet. |
 | `pool` | Everything available to build with — call this BEFORE building anything new. |
-| `pool_get capability=hermes` | Download Hermes (or a Hugging Face model) onto this machine. |
+| `pool_get capability=hermes confirm=true` | Download Hermes (or a HF model) onto this machine. **Needs confirm=true** — only after the user asks. |
 | `ask prompt="..." [model=...]` | Ask a local Ollama model. Works offline. |
 | `hf action=search query="..."` | Search Hugging Face for a model. |
-| `hf action=download model="owner/name"` | Download a Hugging Face model locally. |
-| `gh action=search query="..."` | Search GitHub for a repo to borrow from. |
-| `gh action=clone repo="owner/name"` | Clone a GitHub repo into `vendor/`. |
+| `hf action=download model="owner/name" confirm=true` | Download a Hugging Face model locally. **Needs confirm=true.** |
+| `gh action=search query="..." [minStars=50]` | Search GitHub for a repo to borrow from. |
+| `gh action=clone repo="owner/name" confirm=true` | Clone a GitHub repo into `vendor/`. **Needs confirm=true.** |
+| `media action=convert input="a.wav" output="a.mp3"` | ffmpeg: `convert`, `cut` (start/end, MM:SS ok), `join` (inputs="a,b"). |
 | `apps` | Every app/agent registered in the studio. |
-| `app_new name="..." kind=agent` | Register a new app. Creates `apps/<id>/` with a run.js stub. |
+| `app_new name="..." kind=agent [runType=python]` | Register a new app. Creates `apps/<id>/` with a run.js (or run.py) stub. |
 | `app_run id=<app-id>` | Run a registered app. It prints one JSON object. |
 | `app_remove id=<app-id>` | Delete an app. |
 
@@ -186,29 +187,40 @@ them** as a new app. The Apps dropdown in the top bar is where it appears.
 
 **Step 1 — check the pool.** Run `pool`. It lists everything you can draw from:
 ComfyUI (image/video/audio generation), Ollama (local LLMs, incl. the speech model),
-Hermes (reasoning — download it with `pool_get capability=hermes` if not present),
-Hugging Face (search/download models with `hf`), GitHub (search/clone with `gh`),
-ffmpeg, Python, and the ComfyUI node packs. Pick the simplest stack that does the job.
-Prefer local (Ollama, ComfyUI, Python) over downloading anything new.
+Hermes (reasoning — download it with `pool_get capability=hermes confirm=true` if not
+present), Hugging Face (search with `hf`, download only with `confirm=true`), GitHub
+(search with `gh`, clone only with `confirm=true`), ffmpeg (`media` command), Python
+(`app_new runType=python` uses ComfyUI's embedded interpreter, which has
+librosa/soundfile/torch), the ComfyUI node packs, and opencode itself. Pick the
+simplest stack that does the job. Prefer local (Ollama, ComfyUI, Python) over
+downloading anything new. **Downloads/clones need the user to have asked first** —
+the tool returns `needConfirm: true` until you re-run it with `confirm=true`.
 
 **Step 2 — scaffold.** `app_new name="Track Namer" kind=agent sourceType=ollama description="..."`.
-This creates `apps/<id>/manifest.json` and a `run.js` stub.
+This creates `apps/<id>/manifest.json` and a `run.js` (or `run.py`) stub that
+self-reports `"stub": true` so a half-built app can't masquerade as finished work.
 
-**Step 3 — write it.** Edit `apps/<id>/run.js`. It receives JSON on `argv[2]` and must
-print one JSON object to stdout. Use `require("child_process").execFile` to shell out
-to `ollama`, `ffmpeg`, `python`, `git`, or `hf` — or call a local HTTP API
-(`http://127.0.0.1:11434/api/generate`, `http://127.0.0.1:8188/prompt`). For a model
-you found on Hugging Face, download it first (`hf action=download`), then point your
-script at the local file. For a GitHub repo, `gh action=clone` into `vendor/` and
-call into its code or copy what you need.
+**Step 3 — write it.** Edit `apps/<id>/run.js` (or `run.py`). It receives JSON on
+`argv[2]` (for Python: `argv[1]`) and must print one JSON object to stdout. Use
+`require("child_process").execFile` to shell out to `ollama`, `ffmpeg`, `python`, `git`,
+or `hf` — or call a local HTTP API (`http://127.0.0.1:11434/api/generate`,
+`http://127.0.0.1:8188/prompt`). Simple file conversions are often one `media` command
+instead of a whole app. For a model you found on Hugging Face, download it first
+(`hf action=download ... confirm=true`), then point your script at the local file. For a
+GitHub repo, `gh action=clone ... confirm=true` into `vendor/` and call into its code
+or copy what you need.
 
-**Step 4 — test.** `app_run id=<id> ...args`. It must return `"result"` not `"error"`.
+**Step 4 — test.** `app_run id=<id> ...args`. It must return `"result"` not `"error"`,
+and `"stub"` must be gone. If the app itself prints `{"error": "..."}`, that is promoted
+to a top-level error (exit code 3) so you cannot mistake a failed run for success.
 Fix and re-run until it works.
 
 **Step 5 — tell them.** One sentence: what it does, and that it's now in the **Apps**
-menu. If they want it on screen, give `apps/<id>/index.html` a simple page that calls
-`POST /api/apps/<id>/run` and shows the JSON — it will be served at
-`http://127.0.0.1:7860/apps/<id>/index.html` and linked from the dropdown automatically.
+menu. Clicking a chat-only app in the dropdown prefills the chat box with "Run the X
+app for me — ", so the human can start it without typing. If they want it on screen,
+give `apps/<id>/index.html` a simple page that calls `POST /api/apps/<id>/run` and shows
+the JSON — it will be served at `http://127.0.0.1:7860/apps/<id>/index.html` and linked
+from the dropdown automatically.
 
 Two working examples to copy from: `apps/song-stats` (plain tool, reads a WAV) and
 `apps/track-namer` (agent, calls a local Ollama model). Do not delete them.
