@@ -1,0 +1,19 @@
+{
+  "id": "track-namer",
+  "name": "Track Namer",
+  "kind": "agent",
+  "description": "Asks a local AI to name and describe a track from its mood/genre. Fully offline.",
+  "source": {
+    "type": "ollama",
+    "ref": "llama3.2:3b",
+    "url": ""
+  },
+  "run": {
+    "type": "node",
+    "entry": "run.js",
+    "timeoutMs": 600000
+  },
+  "inputs": [],
+  "createdAt": "2026-10-10T05:25:32.025Z",
+  "createdBy": "agent"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "song-stats",
+  "name": "Song Stats",
+  "kind": "tool",
+  "description": "Reads a WAV file and reports duration, channels, loudness and peak — no GPU needed.",
+  "source": {
+    "type": "local",
+    "ref": "",
+    "url": ""
+  },
+  "run": {
+    "type": "node",
+    "entry": "run.js",
+    "timeoutMs": 600000
+  },
+  "inputs": [],
+  "createdAt": "2026-10-10T05:24:56.774Z",
+  "createdBy": "agent"
+}

@@ -23,6 +23,8 @@ const CLIENT_ID = "ai-studio";
 
 const { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes, pickPositivePromptNode, pickNegativePromptNode } = require("./convert.js");
 const projects = require("./projects.js");
+const apps = require("./apps.js");
+const capabilities = require("./capabilities.js");
 
 let specIndex = null;
 let objectInfo = null;
@@ -566,6 +568,143 @@ const TOOLS = {
       return r;
     },
   },
+
+  // ---------- capability pool: what the studio can draw from ----------
+
+  pool: {
+    description: "Everything available to build with: ComfyUI, Ollama, Hermes, Hugging Face, GitHub, ffmpeg, Python. Check this BEFORE building anything new.",
+    async run() {
+      return capabilities.pool();
+    },
+  },
+
+  pool_get: {
+    description: "Download/fetch a capability on request (Hermes model, a Hugging Face model).",
+    args: 'capability=hermes  |  capability=huggingface-model model="<owner>/<name>"',
+    async run(a) {
+      const id = a.capability || a._pos;
+      if (!id) return { error: "Tell me what to fetch: capability=hermes or capability=huggingface-model model=..." };
+      return capabilities.get(id, a);
+    },
+  },
+
+  ask: {
+    description: "Ask a local language model (Ollama). Works offline. Defaults to a small fast model.",
+    args: 'prompt="..." [model=llama3.2:3b] [json=true]',
+    async run(a) {
+      if (!a.prompt) return { error: "prompt is required" };
+      const model = a.model || "llama3.2:3b";
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 180000);
+      try {
+        const r = await fetch((process.env.OLLAMA_URL || "http://127.0.0.1:11434") + "/api/generate", {
+          method: "POST", signal: ctl.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model, prompt: a.prompt, stream: false, format: a.json ? "json" : undefined }),
+        });
+        const j = await r.json();
+        if (!r.ok) return { error: j.error || `ollama ${r.status}` };
+        return { model, response: (j.response || "").slice(0, 12000), evalCount: j.eval_count };
+      } catch (e) {
+        return { error: "Ollama failed: " + e.message };
+      } finally { clearTimeout(t); }
+    },
+  },
+
+  hf: {
+    description: "Hugging Face: search for a model, or download one onto this machine.",
+    args: 'action=search query="vocal separation"  |  action=download model="<owner>/<name>"',
+    async run(a) {
+      const action = a.action || "search";
+      const which = (exe) => new Promise((res) => {
+        execFile(process.platform === "win32" ? "where" : "which", [exe], { windowsHide: true }, (e, o) => res(e ? null : String(o).split(/\r?\n/)[0].trim()));
+      });
+      const hf = await which("hf");
+      if (!hf) return { error: "The hf tool is not installed." };
+      if (action === "download") {
+        if (!a.model) return { error: "model id required, e.g. model=openai/whisper-small" };
+        const dest = a.dest || "D:\\ComfyUI_windows_portable\\ComfyUI\\models\\huggingface";
+        fs.mkdirSync(dest, { recursive: true });
+        const r = await runJsonCmd(hf, ["download", a.model, "--local-dir", dest], 30 * 60 * 1000);
+        return r.ok ? { ok: true, model: a.model, dest } : { error: (r.err || r.stderr || "download failed").slice(0, 500) };
+      }
+      // search via the Hub API (no CLI search in older hf versions)
+      const q = encodeURIComponent(a.query || "");
+      if (!q) return { error: "query is required" };
+      const url = `https://huggingface.co/api/models?search=${q}&sort=downloads&direction=-1&limit=${a.limit || 8}`;
+      const resp = await fetch(url);
+      const list = await resp.json();
+      return {
+        query: a.query,
+        models: (list || []).map((m) => ({ id: m.id, downloads: m.downloads, likes: m.likes, pipeline: m.pipeline_tag })),
+      };
+    },
+  },
+
+  gh: {
+    description: "GitHub: search public repositories, or clone one to borrow code from.",
+    args: 'action=search query="..."  |  action=clone repo="owner/name" [dir=name]',
+    async run(a) {
+      const action = a.action || "search";
+      if (action === "clone") {
+        if (!a.repo) return { error: "repo is required, e.g. repo=chrisber/Demucs" };
+        const dir = path.join(__dirname, "..", "vendor", a.dir || path.basename(a.repo));
+        if (fs.existsSync(dir)) return { ok: true, dir, note: "already cloned" };
+        fs.mkdirSync(path.dirname(dir), { recursive: true });
+        const r = await runJsonCmd("git", ["clone", "--depth", "1", `https://github.com/${a.repo}.git`, dir], 10 * 60 * 1000);
+        return r.ok ? { ok: true, repo: a.repo, dir } : { error: (r.err || r.stderr || "clone failed").slice(0, 500) };
+      }
+      const q = encodeURIComponent((a.query || "") + " stars:>50");
+      const resp = await fetch(`https://api.github.com/search/repositories?q=${q}&sort=stars&order=desc&per_page=${a.limit || 6}`, {
+        headers: { Accept: "application/vnd.github+json", "User-Agent": "ai-studio" },
+      });
+      const j = await resp.json();
+      if (!resp.ok) return { error: j.message || `github ${resp.status}` };
+      return {
+        query: a.query,
+        repos: (j.items || []).map((r) => ({ full_name: r.full_name, stars: r.stargazers_count, description: (r.description || "").slice(0, 140), url: r.html_url })),
+      };
+    },
+  },
+
+  // ---------- apps: things the studio can do, built on request ----------
+
+  apps: {
+    description: "List every app/agent registered in the studio (plus the built-in pages).",
+    async run() {
+      const pool = await capabilities.pool();
+      return { ...apps.listWithBuiltins(), pool: { readyCount: pool.readyCount, total: pool.total } };
+    },
+  },
+
+  app_new: {
+    description: "Register a new app/agent in the studio. Creates apps/<id>/ with a manifest and a run.js stub.",
+    args: 'name="Stem Sampler" kind=agent|tool description="..." [sourceType=huggingface|github|ollama|comfyui|local] [sourceRef="owner/model"] [runType=node|python]',
+    async run(a) {
+      if (a.name == null && a._pos) a.name = a._pos;
+      if (!a.name) return { error: 'name is required, e.g. app_new name="Stem Sampler"' };
+      return apps.create(a);
+    },
+  },
+
+  app_run: {
+    description: "Run a registered app/agent with arguments. Its run.js prints one JSON object back.",
+    args: 'id=<app-id> [any=args it expects]',
+    async run(a) {
+      const id = a.id || a._pos;
+      if (!id) return { error: "id is required. List them with: apps" };
+      const { id: _drop, ...rest } = a;
+      return apps.run(id, rest);
+    },
+  },
+
+  app_remove: {
+    description: "Unregister and delete an app the studio built.",
+    args: "id=<app-id>",
+    async run(a) {
+      return apps.remove(a.id || a._pos);
+    },
+  },
 };
 
 // Run a studio script that prints one JSON object, and hand back that object.
@@ -578,6 +717,15 @@ function runNodeJson(args) {
       try { parsed = JSON.parse(out); } catch {}
       if (parsed) return resolve(parsed);
       resolve({ error: (err ? err.message + " — " : "") + (out || stderr || "no output").slice(0, 600) });
+    });
+  });
+}
+
+// Run an arbitrary local command (git/hf/ollama/…) and return ok/stdout/stderr.
+function runJsonCmd(cmd, args, timeoutMs = 60000) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { cwd: ROOT, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+      resolve({ ok: !err, stdout: String(stdout || ""), stderr: String(stderr || ""), err: err ? err.message : null });
     });
   });
 }

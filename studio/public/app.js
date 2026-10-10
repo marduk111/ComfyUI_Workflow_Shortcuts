@@ -1111,6 +1111,55 @@ function bindUI() {
   // examples
   $$(".chip").forEach((c) => c.addEventListener("click", () => { $("#msg").value = c.dataset.ex; autoGrow(); $("#msg").focus(); }));
 
+  // ---- Apps dropdown: built-in pages + anything the AI has built ----
+  (function appsMenu() {
+    const btn = $("#apps-btn"), pop = $("#apps-pop");
+    if (!btn || !pop) return;
+    const builtinBox = $("#apps-builtin"), listBox = $("#apps-list");
+
+    function item(entry) {
+      const a = document.createElement(entry.web && entry.web.page ? "a" : "button");
+      a.className = "apps-item";
+      if (entry.web && entry.web.page) { a.href = entry.web.page; a.target = "_blank"; }
+      const kind = document.createElement("span");
+      kind.className = "kind";
+      kind.textContent = entry.kind || "app";
+      const nm = document.createElement("span");
+      nm.className = "nm"; nm.textContent = entry.name || entry.id;
+      const ds = document.createElement("span");
+      ds.className = "ds"; ds.textContent = entry.description || "";
+      a.append(kind, nm, ds);
+      if (!entry.web || !entry.web.page) a.title = "Chat-only app — ask the AI to run it";
+      return a;
+    }
+
+    async function refresh() {
+      try {
+        const r = await (await fetch("/api/apps")).json();
+        builtinBox.innerHTML = "";
+        listBox.innerHTML = "";
+        for (const b of r.builtins || []) builtinBox.appendChild(item(b));
+        const list = r.apps || [];
+        if (!list.length) listBox.innerHTML = '<span class="apps-empty">Nothing built yet — ask the chat for a new tool.</span>';
+        for (const app of list) listBox.appendChild(item(app));
+      } catch (e) { /* menu stays empty; not fatal */ }
+    }
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = pop.classList.toggle("hidden");
+      if (!open) refresh();
+    });
+    document.addEventListener("click", (e) => { if (!pop.contains(e.target) && e.target !== btn) pop.classList.add("hidden"); });
+    const ask = $("#apps-ask");
+    if (ask) ask.addEventListener("click", () => {
+      pop.classList.add("hidden");
+      $("#msg").value = "Build me an app that ";
+      autoGrow(); $("#msg").focus();
+    });
+    window.__refreshApps = refresh;
+  })();
+
   // tabs
   function showTab(name) {
     $$(".tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));

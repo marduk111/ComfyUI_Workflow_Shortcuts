@@ -35,7 +35,17 @@
 
   <div class="top-actions">
     <select id="model-pick" title="Which AI brain to use"></select>
-    <a href="/plugin.html" class="ghost" style="display:inline-block;padding:8px 12px;text-decoration:none" title="Play the audio effects this studio has built">Plugins</a>
+    <div class="apps-menu">
+      <button id="apps-btn" class="ghost" title="Everything this studio can do — built-in pages and apps the AI has built">Apps ▾</button>
+      <div id="apps-pop" class="apps-pop hidden">
+        <div class="apps-pop-head">Open</div>
+        <div id="apps-builtin"></div>
+        <div class="apps-pop-head">Built here</div>
+        <div id="apps-list"><span class="apps-empty">Nothing built yet — ask the chat for a new tool.</span></div>
+        <div class="apps-sep"></div>
+        <button id="apps-ask" class="apps-item apps-ask" title="Tell the AI what you need and it will build it">＋ Ask the AI to build a new app</button>
+      </div>
+    </div>
     <button id="btn-new-chat" class="ghost" title="Start a fresh conversation">New chat</button>
   </div>
 </header>

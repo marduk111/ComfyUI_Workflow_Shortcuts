@@ -80,6 +80,29 @@ Definitions live in `plugins/` (currently `Stem_Instrument_Repair.json`, a stem
 cleanup effect with 7 controls). The AI can write new ones on request — describe the
 sound you want and it can produce a definition, test it, and build it.
 
+### Apps — tools the AI builds for you
+
+Click **Apps ▾** in the top bar to see everything the studio can do. Built-in pages
+(Plugins) sit next to anything the AI has built for you. **＋ Ask the AI to build a
+new app** drops a prompt into the chat — describe the task and the AI will build it.
+
+The AI draws from a pool of resources it can check at any time:
+
+| Resource | What it gives the AI |
+|---|---|
+| ComfyUI | Image, video and audio generation on your GPU |
+| Ollama | Local language models (including the speech model for transcription) |
+| Hermes | A strong local reasoning model for planning and code |
+| Hugging Face | Thousands of ready-made AI models to download |
+| GitHub | Public repos to borrow working code from |
+| ffmpeg / Python | Media conversion and scripting |
+
+So when you say "I need a tool that does X", the AI can search Hugging Face for a
+model, clone a GitHub repo for the glue code, wire it to a local Ollama brain, and
+register the result as a new app — all on this machine, nothing uploaded. Two examples
+already exist: **Song Stats** (reads a WAV and reports loudness) and **Track Namer**
+(asks a local model to name your track from a mood).
+
 ### How long things take
 
 | What | Roughly |
@@ -117,6 +140,9 @@ sound you want and it can produce a definition, test it, and build it.
 | `studio/plugins/test_render.js` | Proves a plugin works before it is built |
 | `plugins/` | Audio effect definitions (JSON + signal-chain code) |
 | `studio/public/plugin.html` | The plugin host page (sliders + play + export) |
+| `studio/apps.js` | App registry — tools/agents the AI builds on request |
+| `studio/capabilities.js` | The pool: ComfyUI, Ollama, Hermes, Hugging Face, GitHub, ffmpeg, Python |
+| `apps/` | Apps the AI has built (each with its own run.js and manifest) |
 | `studio/mcp-comfyui.js` | MCP front door for the same operations |
 | `studio/public/` | The browser interface |
 | `projects/` | Your project folders (created as you make them) |

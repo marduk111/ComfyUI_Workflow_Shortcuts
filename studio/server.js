@@ -18,6 +18,8 @@ const path = require("path");
 const { spawn, execFile } = require("child_process");
 const { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes, pickPositivePromptNode, pickNegativePromptNode } = require("./convert.js");
 const projects = require("./projects.js");
+const apps = require("./apps.js");
+const capabilities = require("./capabilities.js");
 
 const PORT = Number(process.env.STUDIO_PORT || 7860);
 // opencode serve must be launched with ROOT as its working directory, otherwise
@@ -837,6 +839,40 @@ const server = http.createServer(async (req, res) => {
       const b = (await readBody(req, 256 * 1024)).toString("utf8");
       log("client:", b.slice(0, 500));
       return json(res, 200, { ok: true });
+    }
+
+    // ---- apps registry (things the studio can do, built on request) ----
+    if (p === "/api/apps" && req.method === "GET") {
+      return json(res, 200, apps.listWithBuiltins());
+    }
+
+    const appRun = p.match(/^\/api\/apps\/([a-z0-9-]+)\/run$/);
+    if (appRun && req.method === "POST") {
+      const body = await readBody(req, 1024 * 1024).then((b) => JSON.parse(b || "{}")).catch(() => ({}));
+      const r = await apps.run(appRun[1], body);
+      return json(res, r.error ? 400 : 200, r);
+    }
+
+    // serve an app's own web page: /apps/<id>/index.html
+    if (p.startsWith("/apps/")) {
+      const rel = p.slice("/apps/".length).replace(/^\/+/, "");
+      const abs = path.join(apps.APPS_DIR, path.normalize(rel).replace(/^(\.\.[\/\\])+/, ""));
+      if (!abs.startsWith(apps.APPS_DIR)) return fail(res, 403, "Outside app folder");
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return serveFile(res, abs);
+      return fail(res, 404, "No such app page");
+    }
+
+    // ---- capability pool (what the studio can draw from) ----
+    if (p === "/api/pool" && req.method === "GET") {
+      // probes hit local services + a few CLIs; cache briefly so the GUI can poll
+      const cacheFile = path.join(DATA, ".pool_cache.json");
+      try {
+        const st = fs.statSync(cacheFile);
+        if (Date.now() - st.mtimeMs < 30000) return json(res, 200, JSON.parse(fs.readFileSync(cacheFile, "utf8")));
+      } catch {}
+      const pool = await capabilities.pool();
+      try { fs.writeFileSync(cacheFile, JSON.stringify(pool)); } catch {}
+      return json(res, 200, pool);
     }
 
     // ---- static GUI ----

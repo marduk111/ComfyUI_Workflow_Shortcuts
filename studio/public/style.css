@@ -45,6 +45,30 @@ h1,h2,h3{margin:0}
 .svc.warn .dot{background:var(--warn);box-shadow:0 0 8px var(--warn)}
 
 .top-actions{display:flex;gap:8px;align-items:center}
+
+/* ---- Apps dropdown ---- */
+.apps-menu{position:relative}
+.apps-pop{
+  position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:300px;max-height:70vh;overflow:auto;
+  background:var(--panel);border:1px solid var(--line2);border-radius:var(--r2);
+  box-shadow:0 14px 40px rgba(0,0,0,.5);padding:6px
+}
+.apps-pop.hidden{display:none}
+.apps-pop-head{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt3);padding:8px 10px 4px}
+.apps-item{
+  display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+  background:transparent;border:0;border-radius:7px;padding:8px 10px;cursor:pointer;color:var(--txt);font:inherit
+}
+.apps-item:hover{background:var(--panel2)}
+.apps-item .nm{font-size:13px}
+.apps-item .ds{font-size:11px;color:var(--txt2);line-height:1.35}
+.apps-item .kind{
+  font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--acc);
+  border:1px solid var(--line2);border-radius:4px;padding:1px 5px;align-self:flex-start;margin-bottom:2px
+}
+.apps-ask{color:var(--acc);font-weight:600}
+.apps-sep{height:1px;background:var(--line);margin:6px 4px}
+.apps-empty{display:block;font-size:11px;color:var(--txt3);padding:6px 10px}
 select,button{
   background:#151b28;border:1px solid var(--line2);border-radius:var(--r2);
   padding:7px 12px;cursor:pointer;transition:.15s;
