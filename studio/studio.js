@@ -83,10 +83,13 @@ async function main() {
   }
 
   console.log(JSON.stringify(result, null, 2));
-  process.exit(result && result.error ? 3 : 0);
+  // Exit by unwinding instead of process.exit(): forcing the exit while the
+  // HTTP keep-alive socket is still closing trips a libuv assertion on Windows
+  // and reports a bogus non-zero code to whoever called us.
+  process.exitCode = result && result.error ? 3 : 0;
 }
 
 main().catch((e) => {
   console.log(JSON.stringify({ error: String((e && e.message) || e) }, null, 2));
-  process.exit(3);
+  process.exitCode = 3;
 });

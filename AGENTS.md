@@ -28,6 +28,7 @@ permission popup. Every other `bash` call will, so prefer this one.
 | `upload <path> [name]` | Copy a file from disk into ComfyUI's input folder. |
 | `set_prompt <file> positive="..."` | Permanently rewrite a workflow's saved prompt. |
 | `set_image <file> filename="x.png"` | Permanently point a workflow at an input image. |
+| `set_audio <file> filename="song.mp3"` | Permanently point a workflow at an input audio file. |
 
 `run` changes the prompt **in memory only** — the saved workflow file is untouched.
 
@@ -78,6 +79,29 @@ Report the **filename** back to them. Images land in
 
 **Lead with LTX** when they want a video: it is seconds instead of 20 minutes. Only reach
 for FramePack if they want a longer or better clip, and warn them about the wait first.
+
+## Song and stem work
+
+Audio workflows use the `AUDIO_*` files. Pass the song as `audio=<filename>` (the file must
+be in ComfyUI's input folder — uploading in the GUI puts it there automatically).
+
+| Request | Workflow file | Takes |
+|---|---|---|
+| Split a song into stems (vocals/drums/bass/other) | `AUDIO_Stems_Split.json` | ~5 s |
+| Acapella / isolated vocals | `AUDIO_Acapella.json` | ~5 s |
+| Karaoke / instrumental (no vocals) | `AUDIO_Karaoke.json` | ~5 s |
+| Make the singing sit on top of the mix | `AUDIO_Vocal_Boost.json` | ~5 s |
+| Warm it up / brighten it / change loudness | `AUDIO_Equalize_Master.json` | ~3 s |
+| Cut out a section (MM:SS to MM:SS) | `AUDIO_Cut_Section.json` | ~3 s |
+| Turn a section into a loop | `AUDIO_Loop_Section.json` | ~3 s |
+| Slow it down or speed it up | `AUDIO_Speed_Shift.json` | ~3 s |
+
+Useful overrides: `audio=song.mp3`, `start_time=0:12 end_time=0:40` (MM:SS), `rate=0.8`
+(1 = unchanged), `volume=3` (**decibels**, 0 = unchanged, +6 = double), `low_gain_dB=3`,
+`mid_gain_dB=-2`, `high_gain_dB=2`, `low_freq=100 high_freq=5000` (Hz), `quality=320k`.
+
+Results are MP3s under `ComfyUI\output\audio\...` and appear in the Results tab with a
+player. To change which song a workflow points at permanently: `set_audio <file> filename="song.mp3"`.
 
 ## If they uploaded a photo
 

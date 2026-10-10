@@ -1,0 +1,146 @@
+{
+  "last_node_id": 12,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 10,
+      "type": "LoadAudio",
+      "pos": [
+        40,
+        60
+      ],
+      "size": {
+        "0": 320,
+        "1": 100
+      },
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": null,
+          "shape": 3,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": {
+        "audio": "test_song.wav"
+      }
+    },
+    {
+      "id": 11,
+      "type": "AudioCrop",
+      "pos": [
+        440,
+        60
+      ],
+      "size": {
+        "0": 320,
+        "1": 100
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": null,
+          "shape": 3,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "AudioCrop"
+      },
+      "widgets_values": {
+        "start_time": "0:00",
+        "end_time": "0:15"
+      }
+    },
+    {
+      "id": 12,
+      "type": "SaveAudioMP3",
+      "pos": [
+        840,
+        60
+      ],
+      "size": {
+        "0": 320,
+        "1": 122
+      },
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 2
+        },
+        {
+          "name": "quality",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null,
+          "shape": 3,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveAudioMP3"
+      },
+      "widgets_values": {
+        "filename_prefix": "audio/cut/section",
+        "quality": "320k"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      10,
+      0,
+      11,
+      0,
+      "AUDIO"
+    ],
+    [
+      2,
+      11,
+      0,
+      12,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

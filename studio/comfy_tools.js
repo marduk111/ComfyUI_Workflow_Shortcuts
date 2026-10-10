@@ -105,6 +105,23 @@ function applyImageToGraph(g, filename, nodeId) {
   return { updated: true, nodeId: node.id, filename };
 }
 
+// Points a workflow's audio loader at a file in ComfyUI's input folder. Newer
+// graphs save widgets as a {name:value} map, older ones as a positional array.
+function applyAudioToGraph(g, filename, nodeId) {
+  const targets = (g.nodes || []).filter((n) => /^loadaudio$|^vhs_loadaudio$/i.test(n.type));
+  const node = nodeId != null ? targets.find((n) => String(n.id) === String(nodeId)) : targets[0];
+  if (!node) return { error: "Workflow has no LoadAudio node" };
+  const wv = node.widgets_values;
+  if (wv && !Array.isArray(wv) && typeof wv === "object") {
+    wv[/vhs_loadaudio/i.test(node.type) ? "audio_file" : "audio"] = filename;
+    return { updated: true, nodeId: node.id, filename };
+  }
+  const idx = Array.isArray(wv) ? wv.findIndex((v) => typeof v === "string") : -1;
+  if (idx < 0) return { error: "LoadAudio node has no filename widget" };
+  wv[idx] = filename;
+  return { updated: true, nodeId: node.id, filename };
+}
+
 function setPrompt(workflow, positive, negative, promptNodeId) {
   const file = path.join(ROOT, path.basename(workflow));
   if (!fs.existsSync(file)) return { error: `No workflow named ${workflow}` };
@@ -148,7 +165,7 @@ const TOOLS = {
   },
 
   list: {
-    description: "List every saved workflow the user can run (text-to-image, image-to-image, ControlNet pose, FramePack/LTX image-to-video).",
+    description: "List every saved workflow the user can run (text-to-image, image-to-image, ControlNet pose, FramePack/LTX image-to-video, and audio/stem editing).",
     async run() {
       await loadObjectInfo();
       return { workflows: listWorkflowFiles() };
@@ -198,9 +215,23 @@ const TOOLS = {
     },
   },
 
+  set_audio: {
+    description: "Point a workflow's LoadAudio node at an audio file already in ComfyUI's input folder.",
+    args: '<workflow.json> {"filename":"song.mp3"}',
+    async run(a) {
+      const file = path.join(ROOT, path.basename(a.workflow));
+      if (!fs.existsSync(file)) return { error: `No workflow named ${a.workflow}` };
+      const g = JSON.parse(fs.readFileSync(file, "utf8"));
+      const res = applyAudioToGraph(g, a.filename, a.nodeId);
+      if (res.error) return res;
+      fs.writeFileSync(file, JSON.stringify(g, null, 2));
+      return { ...res, file: path.basename(file) };
+    },
+  },
+
   run: {
     description: "Queue a workflow on the local GPU. Returns prompt_id. The GUI animates the nodes live while it runs.",
-    args: '<workflow.json> {"positive":"...","steps":12,"image":"photo.png","seed":"random"}',
+    args: '<workflow.json> {"positive":"...","steps":12,"image":"photo.png","audio":"song.mp3","seed":"random"}',
     async run(args) {
       await loadObjectInfo();
       const file = path.join(ROOT, path.basename(args.workflow));
@@ -218,6 +249,10 @@ const TOOLS = {
       }
       if (args.image) {
         const r = applyImageToGraph(g, args.image);
+        if (r.error) return r;
+      }
+      if (args.audio) {
+        const r = applyAudioToGraph(g, args.audio, args.audioNodeId);
         if (r.error) return r;
       }
 
@@ -254,16 +289,19 @@ const TOOLS = {
         markApplied("width", hitW);
         markApplied("height", hitH);
       }
-      // positive/negative/image are applied above and abort the call on failure,
-      // so reaching here means they took effect.
+      // positive/negative/image/audio are applied above and abort the call on
+      // failure, so reaching here means they took effect.
       if (args.positive) applied.positive = args.positive;
       if (args.negative) applied.negative = args.negative;
       if (args.image) applied.image = args.image;
+      if (args.audio) applied.audio = args.audio;
       if (args.project) applied.project = args.project;
 
       // Anything else (denoise, cfg, length, frame_count, ...) is applied to every
       // node that has an input of that name, keeping the original value's type.
-      const RESERVED = new Set(["workflow", "positive", "negative", "image", "seed", "steps", "width", "height", "promptNodeId", "project"]);
+      // "audio" is reserved on purpose: the generic loop must never overwrite a
+      // socket link on AudioSeparation/AudioCrop with a filename string.
+      const RESERVED = new Set(["workflow", "positive", "negative", "image", "audio", "audioNodeId", "seed", "steps", "width", "height", "promptNodeId", "project"]);
       for (const [key, raw] of Object.entries(args)) {
         if (RESERVED.has(key) || raw == null || raw === "") continue;
         let hit = false;

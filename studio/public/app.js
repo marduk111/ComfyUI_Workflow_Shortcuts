@@ -806,7 +806,7 @@ function renderAttached() {
   strip.classList.remove("hidden");
   strip.innerHTML = state.attached.map((a, i) => `
     <div class="att">
-      ${a.file.type.startsWith("image") ? `<img src="${a.localUrl}" alt="">` : `<span>&#127916;</span>`}
+      ${a.file.type.startsWith("image") ? `<img src="${a.localUrl}" alt="">` : a.file.type.startsWith("audio") ? `<span>&#127925;</span>` : `<span>&#127916;</span>`}
       <span>${esc(a.file.name.slice(0, 22))}</span>
       <span class="${a.status === "ready" ? "ok" : ""}">${a.status === "ready" ? "✓" : a.status === "error" ? "✗" : "…"}</span>
       <span class="x" data-i="${i}">&times;</span>
@@ -953,7 +953,11 @@ function renderAssets() {
   if (!state.assets.length) { g.innerHTML = ""; return; }
   g.innerHTML = state.assets.map((a) => {
     const url = `/api/file?path=${encodeURIComponent(`D:\\ComfyUI_windows_portable\\ComfyUI\\input\\${a.name}`)}`;
-    return `<div class="res" data-url="${url}"><img src="${url}" loading="lazy" onerror="this.style.display='none'">
+    const isAud = /\.(mp3|wav|flac|ogg|m4a|opus)$/i.test(a.name);
+    const inner = isAud
+      ? `<audio class="res-audio" src="${url}" controls preload="metadata" onclick="event.stopPropagation()"></audio>`
+      : `<img src="${url}" loading="lazy" onerror="this.style.display='none'">`;
+    return `<div class="res${isAud ? " res-audio-card" : ""}" data-url="${url}">${inner}
       <div class="res-cap">${esc(a.name)}</div></div>`;
   }).join("");
   bindLightbox(g);
@@ -963,7 +967,7 @@ function renderAssets() {
 async function loadResults() {
   try {
     const r = await (await fetch("/api/results?limit=30")).json();
-    const fresh = (r.results || []).filter((x) => /\.(png|jpg|jpeg|webp|gif|mp4|webm|mov)$/i.test(x.name));
+    const fresh = (r.results || []).filter((x) => /\.(png|jpg|jpeg|webp|gif|mp4|webm|mov|mp3|wav|flac|ogg|m4a|opus)$/i.test(x.name));
     const prev = new Set(state.results.map((x) => x.url));
     state.results = fresh;
     renderResults();
@@ -980,13 +984,16 @@ function renderResults() {
   if (!state.results.length) { g.innerHTML = ""; empty.classList.remove("hidden"); return; }
   empty.classList.add("hidden");
   g.innerHTML = state.results.map((r) => {
-    const isVid = r.video || /\.(mp4|webm|gif|mov)$/i.test(r.name);
-    const inner = isVid
-      ? `<video src="${r.url}" muted loop autoplay playsinline></video>`
-      : `<img src="${r.url}" loading="lazy">`;
+    const isAud = /\.(mp3|wav|flac|ogg|m4a|opus)$/i.test(r.name);
+    const isVid = !isAud && (r.video || /\.(mp4|webm|gif|mov)$/i.test(r.name));
+    const inner = isAud
+      ? `<audio class="res-audio" src="${r.url}" controls preload="metadata" onclick="event.stopPropagation()"></audio>`
+      : isVid
+        ? `<video src="${r.url}" muted loop autoplay playsinline></video>`
+        : `<img src="${r.url}" loading="lazy">`;
     const when = r.mtime ? new Date(r.mtime).toLocaleTimeString() : "";
-    return `<div class="res" data-url="${r.url}" title="${esc(r.name)}">${inner}
-      <span class="badge">${isVid ? "video" : "image"}</span>
+    return `<div class="res${isAud ? " res-audio-card" : ""}" data-url="${r.url}" title="${esc(r.name)}">${inner}
+      <span class="badge">${isAud ? "audio" : isVid ? "video" : "image"}</span>
       <div class="res-cap">${esc(r.name)}${when ? " · " + when : ""}</div></div>`;
   }).join("");
   bindLightbox(g);
@@ -998,13 +1005,21 @@ function bindLightbox(grid) {
       if (!url) return;
       const lb = $("#lightbox");
       const target = $("#lightbox-img");
-      if (/\.(mp4|webm|mov)$/i.test(url)) {
+      const drop = (sel) => { const el = lb.querySelector(sel); if (el) el.remove(); };
+      if (/\.(mp3|wav|flac|ogg|m4a|opus)$/i.test(url)) {
         target.style.display = "none";
+        drop("video");
+        let a = lb.querySelector("audio");
+        if (!a) { a = document.createElement("audio"); a.controls = true; a.autoplay = true; a.style.maxWidth = "86vw"; lb.insertBefore(a, $("#lightbox-close")); }
+        a.src = url; a.classList.remove("hidden");
+      } else if (/\.(mp4|webm|mov)$/i.test(url)) {
+        target.style.display = "none";
+        drop("audio");
         let v = lb.querySelector("video");
         if (!v) { v = document.createElement("video"); v.controls = true; v.autoplay = true; v.style.maxWidth = "92vw"; v.style.maxHeight = "88vh"; v.style.borderRadius = "12px"; lb.insertBefore(v, $("#lightbox-close")); }
         v.src = url; v.classList.remove("hidden");
       } else {
-        const v = lb.querySelector("video"); if (v) v.remove();
+        drop("video"); drop("audio");
         target.style.display = ""; target.src = url;
       }
       lb.classList.remove("hidden");
@@ -1134,6 +1149,7 @@ function bindUI() {
     if (e.target.id === "lightbox" || e.target.id === "lightbox-close") {
       $("#lightbox").classList.add("hidden");
       const v = $("#lightbox").querySelector("video"); if (v) { v.pause(); v.removeAttribute("src"); }
+      const a = $("#lightbox").querySelector("audio"); if (a) { a.pause(); a.removeAttribute("src"); }
       $("#lightbox-img").src = "";
     }
   });

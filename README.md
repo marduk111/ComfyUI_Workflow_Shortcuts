@@ -46,11 +46,32 @@ you keep revisiting — give it a **project**.
   upload it to your GitHub account as a **private** repository — press Cancel
   to keep it local.
 
+### Songs and stems
+
+Sound works the same way as images and video — drag an MP3 or WAV into the window
+and ask for it in plain English:
+
+- *"split this song into stems"* → vocals, drums, bass and "other", as four files
+- *"give me the acapella"* / *"make a karaoke version"*
+- *"make the singing louder than the instruments"*
+- *"warm it up"*, *"take the harshness out"*, *"make it louder"*
+- *"cut out the first 12 seconds"*, *"loop the chorus"*, *"slow it down"*
+
+The separated stems come out as separate MP3s under `output\audio\`, so you can drag
+them straight into any music program afterwards. Anything you drop in while a project
+is active is filed into that project too.
+
+Under the hood this uses the free open-source **Hybrid Demucs** stem separator
+(~320 MB, downloaded once and cached) running on your own graphics card — nothing
+is uploaded anywhere.
+
 ### How long things take
 
 | What | Roughly |
 |---|---|
 | Image | 10–30 seconds |
+| Song edit (cut, loop, EQ, speed) | a few seconds |
+| Split a song into stems | about 5 seconds |
 | Short video (fast model) | a few seconds |
 | Better video (FramePack) | **15–20 minutes** — the AI will warn you first |
 
@@ -95,6 +116,14 @@ Organised collection of workflow shortcut JSON files from Desktop, reviewed agai
 ## Files in this folder
 | Filename | Type/Family | Nodes | Links | Key features |
 |---------|-------------|-------|-------|--------------|
+| AUDIO_Acapella.json | Audio, stems | 3 | 2 | Isolated vocals |
+| AUDIO_Cut_Section.json | Audio, edit | 3 | 2 | Trim MM:SS to MM:SS |
+| AUDIO_Equalize_Master.json | Audio, master | 4 | 3 | 3-band EQ + loudness |
+| AUDIO_Karaoke.json | Audio, stems | 5 | 6 | Instrumental (no vocals) |
+| AUDIO_Loop_Section.json | Audio, edit | 6 | 8 | Repeat a section 4x |
+| AUDIO_Speed_Shift.json | Audio, edit | 3 | 2 | Speed up / slow down |
+| AUDIO_Stems_Split.json | Audio, stems | 6 | 5 | Vocals, drums, bass, other |
+| AUDIO_Vocal_Boost.json | Audio, remix | 7 | 9 | Vocals lifted over the mix |
 | FramePack_HV_Example.json | FramePack, HV | 31 | 32 | FramePack, HV |
 | FramePack_I2V.json | FramePack, I2V | 14 | 18 | FramePack, I2V |
 | SD15_ControlNet_Pose.json | ControlNet | 10 | 15 | ControlNet |
