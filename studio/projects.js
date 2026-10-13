@@ -20,7 +20,7 @@ const pexec = promisify(execFile);
 
 const ROOT = path.resolve(__dirname, "..");
 const PROJECTS_DIR = path.join(ROOT, "projects");
-const INPUT_DIR = process.env.COMFY_INPUT || "D:\\ComfyUI_windows_portable\\ComfyUI\\input";
+const INPUT_DIR = require("./config.js").INPUT_DIR;
 
 function slugify(name) {
   return String(name)

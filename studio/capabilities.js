@@ -23,7 +23,7 @@ const { execFile } = require("child_process");
 const COMFY_URL = process.env.COMFY_URL || "http://127.0.0.1:8188";
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
 const OPENCODE_PORT = process.env.OPENCODE_PORT || 4097;
-const COMFY_ROOT = process.env.COMFY_ROOT || "D:\\ComfyUI_windows_portable";
+const COMFY_ROOT = require("./config.js").COMFY_ROOT;
 
 // The pool costs a few network probes and CLI calls to assemble, so results
 // are cached briefly. Both the CLI (`pool`) and the GUI (/api/pool) share

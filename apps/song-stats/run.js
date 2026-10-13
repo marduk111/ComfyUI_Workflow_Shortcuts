@@ -7,7 +7,7 @@ const path = require("path");
 const { readWav } = require("../../studio/plugins/wav.js");
 
 const args = JSON.parse(process.argv[2] || "{}");
-const file = args.file || "D:\\ComfyUI_windows_portable\\ComfyUI\\input\\test_song.wav";
+const file = args.file || path.join(require("../../studio/config.js").INPUT_DIR, "test_song.wav");
 
 try {
   const wav = readWav(file);

@@ -25,6 +25,8 @@ const state = {
   pendingPerm: null,      // permission request waiting on the human
   activeProject: "",      // project folder this conversation belongs to
   projects: [],
+  inputDir: "",           // ComfyUI input folder (sent by /api/status)
+  outputDir: "",          // ComfyUI output folder (sent by /api/status)
 };
 
 const NODE_TITLES = {
@@ -174,6 +176,8 @@ function step(text, kind = "") {
 async function loadStatus() {
   try {
     const s = await (await fetch("/api/status")).json();
+    if (s.inputDir) state.inputDir = s.inputDir;
+    if (s.outputDir) state.outputDir = s.outputDir;
     setSvc("svc-opencode", s.opencode && s.opencode.connected);
     setSvc("svc-comfyui", s.comfy && s.comfy.connected);
     setSvc("svc-ollama", s.ollama && s.ollama.connected);
@@ -399,7 +403,8 @@ function connectEvents() {
     for (const o of d.outputs || []) {
       const isVideo = /\.(mp4|webm|gif|mov)$/i.test(o.filename || "");
       const isAudio = /\.(wav|mp3|flac|ogg|m4a)$/i.test(o.filename || "");
-      const url = `/api/file?path=${encodeURIComponent(`D:\\ComfyUI_windows_portable\\ComfyUI\\output\\${o.subfolder ? o.subfolder + "\\" : ""}${o.filename}`)}`;
+      const name = (o.subfolder ? o.subfolder + "\\" : "") + o.filename;
+      const url = `/api/file?kind=output&name=${encodeURIComponent(name)}`;
       addResult({ name: o.filename, url, video: isVideo, audio: isAudio, node: d.node });
       const kind = isVideo ? "video" : isAudio ? "audio file" : "picture";
       step(`Finished: ${o.filename} (${kind})`, "ok");
@@ -1146,7 +1151,7 @@ function renderAssets() {
   const g = $("#assets-grid");
   if (!state.assets.length) { g.innerHTML = ""; return; }
   g.innerHTML = state.assets.map((a) => {
-    const url = `/api/file?path=${encodeURIComponent(`D:\\ComfyUI_windows_portable\\ComfyUI\\input\\${a.name}`)}`;
+    const url = `/api/file?kind=input&name=${encodeURIComponent(a.name)}`;
     const isAud = /\.(mp3|wav|flac|ogg|m4a|opus)$/i.test(a.name);
     const inner = isAud
       ? `<audio class="res-audio" src="${url}" controls preload="metadata" onclick="event.stopPropagation()"></audio>`

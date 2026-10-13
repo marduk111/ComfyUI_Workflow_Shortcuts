@@ -12,7 +12,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const COMFY_BAT = "D:\\ComfyUI_windows_portable\\ComfyUI\\run_nvidia_gpu.bat";
+const COMFY_BAT = require("./config.js").COMFY_BAT;
 const STUDIO_PORT = 7860;
 const COMFY_PORT = 8188;
 

@@ -43,7 +43,7 @@ function main() {
     return;
   }
   const pluginPath = path.resolve(args[0]);
-  const inputPath = args[1] ? path.resolve(args[1]) : path.join("D:", "ComfyUI_windows_portable", "ComfyUI", "input", "test_song.wav");
+  const inputPath = args[1] ? path.resolve(args[1]) : path.join(require("../config.js").INPUT_DIR, "test_song.wav");
   const seconds = Number(args[2] || 8);
 
   const plugin = JSON.parse(fs.readFileSync(pluginPath, "utf8"));

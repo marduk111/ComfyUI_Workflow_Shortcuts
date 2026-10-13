@@ -175,8 +175,7 @@ function run(id, args = {}) {
   // bare `python` on PATH, which on Windows may be a Store stub.
   let runtime = process.execPath;
   if (app.run.type === "python") {
-    runtime = process.env.STUDIO_PYTHON ||
-      path.join("D:\\ComfyUI_windows_portable", "python_embeded", "python.exe");
+    runtime = process.env.STUDIO_PYTHON || require("./config.js").PY_EXE;
     if (!fs.existsSync(runtime)) runtime = "python";
   }
   const timeout = app.run.timeoutMs || 600000;

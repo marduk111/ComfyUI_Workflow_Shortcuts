@@ -10,12 +10,13 @@
 const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
+const cfg = require("./config.js");
 
-const COMFY = process.env.COMFY_URL || "http://127.0.0.1:8188";
+const COMFY = cfg.COMFY_URL;
 const ROOT = path.resolve(__dirname, "..");
-const INPUT_DIR = process.env.COMFY_INPUT || "D:\\ComfyUI_windows_portable\\ComfyUI\\input";
-const OUTPUT_DIR = process.env.COMFY_OUTPUT || "D:\\ComfyUI_windows_portable\\ComfyUI\\output";
-const MODELS_DIR = process.env.COMFY_MODELS || "D:\\ComfyUI_windows_portable\\ComfyUI\\models";
+const INPUT_DIR = cfg.INPUT_DIR;
+const OUTPUT_DIR = cfg.OUTPUT_DIR;
+const MODELS_DIR = cfg.MODELS_DIR;
 const LAST_RUN_FILE = path.join(__dirname, "data", ".last_run.json");
 // Must match server.js's websocket client_id or ComfyUI won't stream
 // execution events to the GUI's animation panel.
@@ -879,7 +880,7 @@ const TOOLS = {
         if (a.confirm !== true && a.confirm !== "true") {
           return { needConfirm: true, error: `Downloading "${a.model}" can take gigabytes. Only if the user asked — re-run with confirm=true.` };
         }
-        const dest = a.dest || "D:\\ComfyUI_windows_portable\\ComfyUI\\models\\huggingface";
+        const dest = a.dest || path.join(MODELS_DIR, "huggingface");
         fs.mkdirSync(dest, { recursive: true });
         const r = await runJsonCmd(hf, ["download", a.model, "--local-dir", dest], 30 * 60 * 1000);
         return r.ok ? { ok: true, model: a.model, dest } : { error: (r.err || r.stderr || "download failed").slice(0, 500) };

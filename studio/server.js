@@ -22,22 +22,23 @@ const apps = require("./apps.js");
 const capabilities = require("./capabilities.js");
 const browser = require("./browser.js");
 const connectors = require("./connectors.js");
+const cfg = require("./config.js");
 
 const PORT = Number(process.env.STUDIO_PORT || 7860);
 // opencode serve must be launched with ROOT as its working directory, otherwise
 // it ignores the project's opencode.json (MCP tools + default model).
 const OPENCODE_PORT = Number(process.env.OPENCODE_PORT || 4097);
 const OPENCODE_EXE = process.env.OPENCODE_EXE || "opencode";
-const COMFY_URL = process.env.COMFY_URL || "http://127.0.0.1:8188";
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
+const COMFY_URL = cfg.COMFY_URL;
+const OLLAMA_URL = cfg.OLLAMA_URL;
 
 const ROOT = path.resolve(__dirname, "..");                 // workflow shortcuts folder
 const STUDIO = __dirname;
 const DATA = path.join(STUDIO, "data");
 const PUBLIC = path.join(STUDIO, "public");
-const COMFY_ROOT = "D:\\ComfyUI_windows_portable";
-const COMFY_INPUT = path.join(COMFY_ROOT, "ComfyUI", "input");
-const COMFY_OUTPUT = path.join(COMFY_ROOT, "ComfyUI", "output");
+const COMFY_ROOT = cfg.COMFY_ROOT;
+const COMFY_INPUT = cfg.INPUT_DIR;
+const COMFY_OUTPUT = cfg.OUTPUT_DIR;
 
 // ComfyUI only streams execution events back to the client_id that submitted
 // the job, so the WebSocket and every /prompt call must share one id.
@@ -492,7 +493,7 @@ const server = http.createServer(async (req, res) => {
           catch { return []; }
         })(),
       ]);
-      return json(res, 200, { comfy, ollama, opencode: ocOk, models, session: state.sessionId, model: state.model, activeProject: state.activeProject || "", port: PORT });
+      return json(res, 200, { comfy, ollama, opencode: ocOk, models, session: state.sessionId, model: state.model, activeProject: state.activeProject || "", port: PORT, inputDir: COMFY_INPUT, outputDir: COMFY_OUTPUT });
     }
 
     // ---- opencode: create / resume a session ----
@@ -836,10 +837,20 @@ const server = http.createServer(async (req, res) => {
 
     // ---- serve a local file (images/videos for the GUI) ----
     if (p === "/api/file") {
-      const target = decodeURIComponent(url.searchParams.get("path") || "");
-      const abs = path.resolve(target);
+      // Preferred: /api/file?kind=output&name=file.png  (resolved server-side)
+      // Legacy:   /api/file?path=C:\...\file.png       (absolute, checked below)
+      const name = url.searchParams.get("name");
+      const kind = url.searchParams.get("kind");
+      let abs;
+      if (name) {
+        const base = kind === "input" ? COMFY_INPUT : COMFY_OUTPUT;
+        abs = path.resolve(base, name.replace(/\//g, "\\"));
+      } else {
+        abs = path.resolve(decodeURIComponent(url.searchParams.get("path") || ""));
+      }
       const allowed = [COMFY_OUTPUT, COMFY_INPUT, path.join(DATA, "uploads"), projects.PROJECTS_DIR];
-      if (!allowed.some((a) => abs.startsWith(a))) return fail(res, 403, "Outside allowed folders");
+      const inAllowed = allowed.some((a) => abs === a || abs.startsWith(a + path.sep));
+      if (!inAllowed) return fail(res, 403, "Outside allowed folders");
       return serveFile(res, abs);
     }
 

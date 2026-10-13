@@ -1,19 +1,103 @@
-# ComfyUI Workflow Shortcuts
+# AI Studio — a friendly local AI workshop
 
-## How to use this folder
+A double-click studio for Windows that turns plain English into images, videos,
+song edits and custom tools — running **entirely on your own PC**. It wraps
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI) (the generator),
+[opencode](https://opencode.ai) (the chat AI), and optional
+[Ollama](https://ollama.com) (offline extras) in one beginner-friendly browser
+window with a live, narrated workflow animation.
 
-**Double-click `START_STUDIO.bat`.** That's it.
+Nothing is uploaded anywhere. No credit card. Free accounts only, and only for
+the few things described in [Accounts](#accounts--what-you-actually-need).
 
-It starts the image generator (ComfyUI), starts the studio, and opens a browser
-window at `http://127.0.0.1:7860`. Keep the black window open while you work.
+---
+
+## What you need
+
+| Requirement | Details |
+|---|---|
+| Windows | Windows 10 or 11 (64-bit) |
+| NVIDIA graphics card | 6 GB VRAM works (tested on a RTX 3050 6 GB); more is better |
+| Disk space | ~15 GB free (ComfyUI 6 GB + models 4 GB + tools) |
+| Internet | Only for the one-time install and model downloads |
+| Node.js | Installed automatically by the installer if missing |
+
+## Install
+
+**Double-click `INSTALL.bat`.** Answer `y` to each question it asks. It checks
+your PC and installs only what's missing:
+
+| Step | What it does | Size / time |
+|---|---|---|
+| 1. Node.js | The runtime the studio runs on (via winget) | ~80 MB |
+| 2. Studio files | Downloads this folder's dependencies | ~1 min |
+| 3. opencode | The chat AI (`npm install -g opencode-ai`) | ~50 MB |
+| 4. Git | Needed to fetch ComfyUI add-ons | ~60 MB |
+| 5. ComfyUI | Official portable build, unpacked to `C:\` | ~6 GB, 10–30 min |
+| 6. Add-on packs | Audio stems, pose detection, video export, FramePack | ~5 min |
+| 7. AI model | DreamShaper 8 (the image model this studio is tuned for) | ~2 GB |
+| 8. Ollama | *Optional* — offline chat models | ~5 min |
+
+You can press `N` to skip anything and re-run `INSTALL.bat` later — it only
+ever installs what's missing.
+
+**Manual install (if you prefer):** get Node.js from
+[nodejs.org](https://nodejs.org), ComfyUI from
+[its releases page](https://github.com/comfyanonymous/ComfyUI/releases)
+(download `ComfyUI_windows_portable_nvidia.7z` and unpack it with
+[7-Zip](https://7-zip.org) to `C:\` so you end up with
+`C:\ComfyUI_windows_portable\ComfyUI\`), then run `INSTALL.bat` to fill in the
+rest.
+
+### ComfyUI somewhere else?
+
+That's fine. The studio looks for ComfyUI at `COMFY_ROOT` (environment
+variable), then tries `D:\ComfyUI_windows_portable`,
+`C:\ComfyUI_windows_portable` and folders next to this one. See
+[Advanced configuration](#advanced-configuration).
+
+## First launch
+
+**Double-click `START_STUDIO.bat`.** It starts ComfyUI (a small black window
+opens — leave it alone), starts the studio, and opens your browser at
+`http://127.0.0.1:7860`. Keep the black window open while you work.
+
+### Sign in the AI once
+
+The chat box is powered by opencode. On a fresh install, open a terminal in
+this folder and run:
+
+```
+opencode auth login
+```
+
+Pick a sign-in method (GitHub is easiest) and finish in the browser. This is
+**free** — it gives the studio its chat model. You only ever do this once.
+
+## Accounts — what you actually need
+
+| Account | Needed? | Why | How |
+|---|---|---|---|
+| **opencode** | **Yes** (one-time) | Powers the chat AI | `opencode auth login` in a terminal, sign in with GitHub |
+| **GitHub** | No — optional | Publishing a project as a repo; borrowing code | Free signup at [github.com](https://github.com); the first push opens a sign-in window |
+| **Hugging Face** | No — optional | Extra AI models via the `hf` tool | Free signup at [huggingface.co](https://huggingface.co) → Settings → Access Tokens → create a read token → `hf auth login` |
+| **CivitAI** | No — optional | Community image models | Free signup at [civitai.com](https://civitai.com), download a `.safetensors` into `ComfyUI\models\checkpoints` |
+| **Ollama** | No account at all | Offline extras | `ollama pull llama3.2` after installing |
+
+Everyday generating needs **no accounts at all** once installed: models are on
+your disk, the GPU is yours, and nothing leaves the machine.
+
+## Using the studio
 
 ### What you'll see
 
 - **Chat** (left) — type what you want in plain English, e.g.
   *"make an image of a cozy cabin in a snowy forest"*, or
   *"turn my photo into a video of me dancing"*. The AI's thinking appears live.
-- **Workflow** (middle) — the pipeline animates as it runs; each box lights up as
-  that step executes.
+- **Workflow** (middle) — the pipeline animates as it runs: each box lights up,
+  a stage counter ("4/9") and a plain-English explanation ("Painting the image
+  with DPM++ 2M — step 12 of 24 done") tell you exactly what is happening, and
+  errors are translated into human words.
 - **Results / Assets / Steps** (right) — every image and video produced, newest
   first. **Assets** holds photos you drag in.
 
@@ -110,13 +194,35 @@ loudness) and **Track Namer** (asks a local model to name your track from a mood
 
 The AI can open a real browser window (your Edge, with your logins) and use websites
 for you — look things up, read pages, click around. Better still, it can **learn a
-site's own API**: watch the calls a site makes when you press a button, save that as a
-recipe (a "connector"), and call it directly next time — no browser, no clicking.
+site's own API**: watch the calls a site makes when you press a button, save that as
+a recipe (a "connector"), and call it directly next time — no browser, no clicking.
 It also wraps local analysis tools: **Mix Doctor** checks a song's BPM, key, loudness
 and mix problems by wrapping the Suno Bridge analyzer from your Desktop.
 
 **Safety:** the browser is your real session. The AI will not submit purchases, delete
 things, or post publicly unless you explicitly ask for that exact action.
+
+## Models — what to download and where
+
+Everything goes into `ComfyUI\models\<folder>` inside your ComfyUI install
+(e.g. `C:\ComfyUI_windows_portable\ComfyUI\models\`).
+
+| Model | Needed for | Where to get it | Put it in |
+|---|---|---|---|
+| `dreamshaper_8.safetensors` | Images (installed by `INSTALL.bat`) | `hf download KatarLegacy/dreamshaper_8 dreamshaper_8.safetensors --local-dir <models>\checkpoints` or CivitAI | `models\checkpoints` |
+| `ltxv-2b-0.9.8-distilled-fp8.safetensors` | Fast photo→video | `hf download Lightricks/LTX-Video ltxv-2b-0.9.8-distilled-fp8.safetensors --local-dir <models>\checkpoints` | `models\checkpoints` |
+| FramePack weights | Longer videos | The FramePack workflows download them automatically on first run | — |
+| ControlNet pose file | *"make this photo follow a pose"* | Ask the AI — it will find one for you | `models\controlnet` |
+
+`hf` is the Hugging Face command-line tool (free, no account needed for these
+files). In chat, just ask the AI to get a model for you.
+
+### Images looking low quality?
+
+Just say so in the chat ("these look blurry" / "the AI art looks cheap"). The AI will
+score the workflow, then either fix it or build a sharper one — better sampler, more
+steps, and a two-pass *refinement* that draws at 512 px and then re-draws at 768 px.
+Quality modes: **draft** (fastest), **balanced** (default, ~25 s), **max** (~40 s).
 
 ### How long things take
 
@@ -128,15 +234,12 @@ things, or post publicly unless you explicitly ask for that exact action.
 | Short video (fast model) | a few seconds |
 | Better video (FramePack) | **15–20 minutes** — the AI will warn you first |
 
-### Images looking low quality?
+## If something goes wrong
 
-Just say so in the chat ("these look blurry" / "the AI art looks cheap"). The AI will
-score the workflow, then either fix it or build a sharper one — better sampler, more
-steps, and a two-pass *refinement* that draws at 512 px and then re-draws at 768 px.
-Quality modes: **draft** (fastest), **balanced** (default, ~25 s), **max** (~40 s).
-
-### If something goes wrong
-
+- **Installer says Node.js still missing** — close the installer window and run
+  `INSTALL.bat` again (after installing, the PATH only refreshes in a new window).
+- **Chat says the AI is offline** — run `opencode auth login` once, then restart
+  with `START_STUDIO.bat`.
 - **Black window says ComfyUI failed** — it usually means another program is
   using the graphics card. Close games/video players and try again.
 - **"The AI wants your permission"** — the AI is about to run a command that
@@ -144,13 +247,34 @@ Quality modes: **draft** (fastest), **balanced** (default, ~25 s), **max** (~40 
   weren't expecting it.
 - **The AI says a tool isn't available** — it should use `node studio/studio.js`,
   which is pre-approved. See `AGENTS.md` for the command list.
+- **PowerShell blocks `opencode.ps1`** — Windows' default script policy; the
+  studio works around it itself, and `INSTALL.bat`/`START_STUDIO.bat` are not
+  affected.
 - **Restarting:** close the black window and double-click `START_STUDIO.bat` again.
 
-### Files added for the studio
+## Advanced configuration
+
+The studio reads these environment variables (each is optional — sensible
+defaults and auto-detection are built in via `studio/config.js`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `COMFY_ROOT` | auto-detect (`D:\`/`C:\ComfyUI_windows_portable`, …) | Where ComfyUI lives |
+| `COMFY_URL` | `http://127.0.0.1:8188` | ComfyUI address |
+| `COMFY_INPUT` / `COMFY_OUTPUT` / `COMFY_MODELS` | `<root>\ComfyUI\…` | Input/output/models folders |
+| `COMFY_PY` | `<root>\python_embeded\python.exe` | Python used for apps |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama address |
+| `STUDIO_PORT` | `7860` | Studio web port |
+| `OPENCODE_PORT` | `4097` | opencode port |
+| `OPENCODE_EXE` | `opencode` | Alternate opencode executable |
+
+## Files added for the studio
 
 | File | What it is |
 |---|---|
+| `INSTALL.bat` / `INSTALL.ps1` | Double-click installer (checks + installs what's missing) |
 | `START_STUDIO.bat` | Double-click to launch everything |
+| `studio/config.js` | Machine configuration: paths, ports, auto-detection |
 | `studio/server.js` | Local web server + live bridge to ComfyUI and the AI |
 | `studio/start.js` | Launcher logic (used by the .bat) |
 | `studio/studio.js` | One CLI the AI uses to drive ComfyUI |
@@ -179,11 +303,8 @@ Quality modes: **draft** (fastest), **balanced** (default, ~25 s), **max** (~40 
 
 ## Workflow catalogue
 
-Organised collection of workflow shortcut JSON files from Desktop, reviewed against ComfyUI installation on D:\ComfyUI_windows_portable.
-
-## ComfyUI context (reviewed)
-- D:\ComfyUI_windows_portable\ComfyUI (install present)
-- User workflows present at: user/workflows/ and user/default/workflows/ (some files here also appear on Desktop)
+Organised collection of workflow shortcut JSON files, reviewed against a live
+ComfyUI installation.
 
 ## Files in this folder
 | Filename | Type/Family | Nodes | Links | Key features |
@@ -210,11 +331,6 @@ Organised collection of workflow shortcut JSON files from Desktop, reviewed agai
 | img2img_controlnet.json | ControlNet | 10 | 15 | ControlNet |
 | ltxv_i2v_2b_dev.json | LTX-Video, I2V | 15 | 19 | LTX-Video, I2V |
 | ltxv_i2v_2b_distilled.json | LTX-Video, I2V | 15 | 19 | LTX-Video, I2V |
-
-## Detailed descriptions
-
-(Added after initial review; per-file node summaries in progress)
-
 
 ## Detailed descriptions
 
@@ -314,8 +430,6 @@ Organised collection of workflow shortcut JSON files from Desktop, reviewed agai
 - Nodes/Links: 15/19
 - Key nodes: LTXVImgToVideo, LTXVConditioning, CheckpointLoaderSimple, KSamplerSelect, VAEDecode, SaveVideo, LoadImage, CLIPTextEncode
 
-
 ---
-
 
 **Note:** FramePack_I2V.json and framepack_i2v_workflow.json are near-duplicates; they differ in CLIPTextEncode prompt text (framepack_i2v_workflow.json includes dancing woman).
