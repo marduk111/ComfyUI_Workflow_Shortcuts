@@ -257,7 +257,9 @@ async function loadHistory() {
       if (m.type === "user") addMsg("user", m.text);
       else if (m.type === "assistant") {
         const txt = (m.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n") || m.text;
-        if (txt) addMsg("ai", txt, m.error ? m.error.message : null);
+        const err = m.error ? (m.error.message || String(m.error)) : null;
+        if (txt) addMsg("ai", txt, err);
+        else if (err) addMsg("ai", "", err);
       }
     }
   } catch {}
@@ -355,6 +357,16 @@ function connectEvents() {
 
   es.addEventListener("agent_idle", () => {
     if (state.busy) { state.busy = false; liveHide(); }
+  });
+
+  es.addEventListener("assistant_error", (e) => {
+    let msg = "The AI stopped because of an error.";
+    try { msg = JSON.parse(e.data).data.message || msg; } catch {}
+    addMsg("ai", "", msg);
+    state.busy = false;
+    liveHide();
+    activity("Stopped on an error.");
+    step("AI error: " + msg.slice(0, 160), "err");
   });
 
   es.addEventListener("comfy_queue", (e) => {
@@ -1062,6 +1074,7 @@ function renderProjects() {
       <div class="proj-actions">
         <button class="ghost use">${active ? "In use" : "Use this project"}</button>
         <button class="ghost pub" title="Save a snapshot of this project">Publish</button>
+        <button class="ghost del" title="Delete this project permanently">Delete</button>
       </div>
     </div>`;
   }).join("");
@@ -1071,6 +1084,29 @@ function renderProjects() {
   list.querySelectorAll(".proj-card .pub").forEach((el) => {
     el.addEventListener("click", (ev) => { ev.stopPropagation(); publishProject(el.closest(".proj-card").dataset.slug); });
   });
+  list.querySelectorAll(".proj-card .del").forEach((el) => {
+    el.addEventListener("click", (ev) => { ev.stopPropagation(); deleteProject(el.closest(".proj-card")); });
+  });
+}
+
+async function deleteProject(card) {
+  const slug = card.dataset.slug;
+  const name = (card.querySelector("h4") || {}).textContent || slug;
+  if (!window.confirm(`Delete project "${name}" permanently?\n\nIts assets and results will be removed from disk. This cannot be undone.`)) return;
+  try {
+    const r = await (await fetch("/api/projects/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug }),
+    })).json();
+    if (r.error) { toast(r.error, "err"); return; }
+    if (state.activeProject === slug) state.activeProject = "";
+    await loadProjects();
+    renderProjectChip();
+    toast('Project "' + name + '" deleted', "ok");
+  } catch {
+    toast("Could not delete the project", "err");
+  }
 }
 
 async function selectProject(slug) {

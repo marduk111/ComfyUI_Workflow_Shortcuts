@@ -157,6 +157,7 @@ workflow, and everything it produced. Projects live in `projects/` next to this 
 | `project_add <file> project=<slug>` | Copy a photo in **and** into ComfyUI so `image=<name>` works. |
 | `project_collect project=<slug>` | Pull fresh output into the project's `results/`. |
 | `project_publish project=<slug> [create=true]` | Snapshot the project into its own git repo. `create=true` also pushes it to a new GitHub repo — **only when they ask**. |
+| `project_remove project=<slug> confirm=true` | Delete the project folder and everything in it. **Irreversible — only run it when the user explicitly asked to delete that project.** |
 
 **Use a project whenever they describe ongoing work** ("my album art", "my channel
 banners", "the video we've been making"). Pass it through the whole run:

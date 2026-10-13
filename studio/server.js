@@ -72,13 +72,19 @@ function mimeFor(name) {
 // opencode re-reads every stored attachment URI on every turn. A session that ever
 // stored a non-inline URI (the old file:// form) can never complete a turn again,
 // so we detect that and start a fresh session instead of failing forever.
+// Same for non-image data: URIs (video/audio) — the chat model rejects them, so
+// every future turn would fail with "does not support media type ...".
 async function sessionIsPoisoned(sid) {
   try {
     const m = await oc(`/api/session/${sid}/message`);
     const msgs = Array.isArray(m) ? m : m.data || [];
     for (const msg of msgs) {
       for (const f of msg.files || []) {
-        if (f && f.uri && !/^data:/.test(String(f.uri))) return true;
+        const uri = String((f && f.uri) || "");
+        if (!uri) continue;
+        if (!/^data:/.test(uri)) return true;
+        const mime = ((/^data:([^;,]+)/.exec(uri) || [])[1] || "").toLowerCase();
+        if (mime && !/^image\//.test(mime)) return true;
       }
     }
   } catch {}
@@ -301,6 +307,21 @@ function handleOpencodeEvent(evt) {
   }
   if (t === "session.next.step.ended" && d.finish === "stop") {
     broadcast("agent_idle", {});
+  }
+  // The model died mid-turn (bad attachment, provider failure, ...). No further
+  // events will ever arrive for it, so clear the GUI's Thinking state now and
+  // pull the real error off the session's last assistant message.
+  if (t === "session.next.step.ended" && d.finish && d.finish !== "stop" && d.finish !== "tool-calls") {
+    broadcast("agent_idle", {});
+    const sid = d.sessionID || state.sessionId;
+    const surface = (msg) => broadcast("assistant_error", { message: msg });
+    if (sid) {
+      oc(`/api/session/${sid}/message`).then((out) => {
+        const msgs = Array.isArray(out) ? out : out.data || [];
+        const last = msgs.slice().reverse().find((m) => m.type === "assistant" && m.error);
+        surface(last ? String((last.error && last.error.message) || last.error) : "The AI stopped because of an error.");
+      }).catch(() => surface("The AI stopped because of an error."));
+    } else surface("The AI stopped because of an error.");
   }
 }
 
@@ -593,6 +614,7 @@ const server = http.createServer(async (req, res) => {
       // opencode does NOT resolve file:// paths here (it sends empty media), so we
       // inline base64 ourselves. The browser sends objects ({name}), tolerate strings too.
       const files = [];
+      const skipped = [];
       const MAX_ATTACH = 6 * 1024 * 1024;
       for (const f of body.files || []) {
         const name = typeof f === "string" ? f : f && (f.name || f.serverName || f.filename);
@@ -601,6 +623,10 @@ const server = http.createServer(async (req, res) => {
         const local = path.join(DATA, "uploads", base);
         if (!fs.existsSync(local)) continue;
         const mime = (f && f.mime) || mimeFor(base);
+        // The chat model only accepts images — sending video/audio makes the
+        // entire turn fail ("does not support media type ..."). Mention those
+        // attachments in the text instead of attaching them.
+        if (!/^image\//.test(mime)) { skipped.push({ name: base, mime }); continue; }
         const st = fs.statSync(local);
         if (st.size > MAX_ATTACH) {
           files.push({ uri: "file:///" + local.replace(/\\/g, "/"), mime, name: base });
@@ -615,6 +641,13 @@ const server = http.createServer(async (req, res) => {
       const proj = body.project || state.activeProject;
       if (proj && projects.readMeta(proj)) {
         text = `(Working project: "${proj}" — folder projects/${proj}, assets in its assets/ folder, results go in its results/ folder. When you queue a render, add project=${proj} to run and to wait.)\n\n${body.text}`;
+      }
+      if (skipped.length) {
+        const names = skipped.map((s) => `"${s.name}"`).join(", ");
+        const hint = skipped.some((s) => /^video\//.test(s.mime))
+          ? "the chat AI can't view videos — it's already in ComfyUI's input folder; attach a photo instead for image work"
+          : "the chat AI can't play audio — pass it to a workflow with audio=<filename>";
+        text += `\n\n(Human attached ${names}, but ${hint}.)`;
       }
 
       const payload = { prompt: { text, ...(files.length ? { files } : {}) } };
@@ -820,6 +853,16 @@ const server = http.createServer(async (req, res) => {
       saveState();
       broadcast("projects_changed", { active: state.activeProject });
       return json(res, 200, { active: state.activeProject });
+    }
+
+    if (p === "/api/projects/delete" && req.method === "POST") {
+      const body = await readBody(req, 64 * 1024).then((b) => JSON.parse(b || "{}")).catch(() => ({}));
+      const r = projects.remove({ project: body.slug });
+      if (r.error) return fail(res, 400, r.error);
+      if (state.activeProject === r.removed) { state.activeProject = ""; saveState(); }
+      log("project deleted:", r.removed);
+      broadcast("projects_changed", { active: state.activeProject });
+      return json(res, 200, r);
     }
 
     if (p === "/api/projects/info" && req.method === "GET") {

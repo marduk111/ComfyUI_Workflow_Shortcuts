@@ -606,6 +606,21 @@ const TOOLS = {
     },
   },
 
+  project_remove: {
+    description: "Delete a project folder and everything inside it (assets, results, workflows). Irreversible — needs confirm=true and only when the user explicitly asked to delete that project.",
+    args: 'project="my-project" confirm=true',
+    async run(a) {
+      if (a.project == null && a._pos) a.project = a._pos;
+      if (a.confirm !== true && a.confirm !== "true") {
+        return { error: "Deleting a project removes its folder and all results for good. Re-run with confirm=true if the user asked for this." };
+      }
+      const r = projects.remove(a);
+      if (r.error) return r;
+      r.hint = "The folder is gone from disk and from the Projects tab.";
+      return r;
+    },
+  },
+
   plugin_build: {
     description: "Compile a plugin definition (JSON + g.* DSP graph) into a browser AudioWorklet under public/plugins/.",
     args: '<plugin.json>|all [demo=<audio.wav>]',

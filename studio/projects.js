@@ -118,6 +118,15 @@ function create({ name, description, workflow }) {
   return { created: true, ...meta, path: projectDir(slug) };
 }
 
+function remove({ project }) {
+  const slug = String(project || "");
+  if (!validSlug(slug)) return { error: "Invalid project name." };
+  const dir = projectDir(slug);
+  if (!readMeta(slug)) return { error: `No project named "${slug}".` };
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { removed: slug, path: dir };
+}
+
 function list() {
   if (!fs.existsSync(PROJECTS_DIR)) return { projects: [], count: 0 };
   const projects = fs
@@ -329,4 +338,4 @@ async function publish({ project, create, visibility, includeAssets, message }) 
   return out;
 }
 
-module.exports = { create, list, info, addAsset, collectResults, allOutputFiles, publish, PROJECTS_DIR, projectDir, validSlug, readMeta, writeMeta, writeReadme };
+module.exports = { create, remove, list, info, addAsset, collectResults, allOutputFiles, publish, PROJECTS_DIR, projectDir, validSlug, readMeta, writeMeta, writeReadme };
