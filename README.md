@@ -299,6 +299,7 @@ defaults and auto-detection are built in via `studio/config.js`):
 | `studio/mcp-comfyui.js` | MCP front door for the same operations |
 | `studio/public/` | The browser interface |
 | `projects/` | Your project folders (created as you make them) |
+| `archive/` | Superseded learning-day workflows (not shown in the picker; move back to root to restore) |
 | `opencode.json` | AI configuration (model, MCP, permissions) |
 | `AGENTS.md` | Instructions given to the AI |
 
@@ -322,17 +323,21 @@ ComfyUI installation.
 | AUDIO_Vocal_Boost.json | Audio, remix | 7 | 9 | Vocals lifted over the mix |
 | FramePack_HV_Example.json | FramePack, HV | 31 | 32 | FramePack, HV |
 | FramePack_I2V.json | FramePack, I2V | 14 | 18 | FramePack, I2V |
-| SD15_ControlNet_Pose.json | ControlNet | 10 | 15 | ControlNet |
-| SD15_ControlNet_Pose_dwpose.json | ControlNet, DWPose | 11 | 14 | ControlNet, DWPose |
+| SD15_ControlNet_Pose_dwpose.json | ControlNet, DWPose | 11 | 14 | Extracts the pose from any photo |
+| SD15_ControlNet_Pose_dwpose_improved.json | ControlNet, DWPose, refined | 11 | 14 | Tuned copy: DPM++ 2M Karras + hires refinement pass |
 | SD15_ControlNet_Pose_refphoto.json | ControlNet, Pose | 12 | 17 | ControlNet, Pose |
+| SD15_ControlNet_Pose_refphoto_improved.json | ControlNet, Pose, refined | 12 | 17 | Tuned copy: DPM++ 2M Karras + hires refinement pass |
 | SD15_Image2Img.json | Generic | 8 | 12 | Generic |
+| SD15_Image2Img_Balanced.json | Generic, refined | 10 | 16 | Photo restyle: 24 steps, CFG 6.5, 512→768 refinement pass |
 | SD15_Image2Img_improved.json | Generic, refined | 10 | 15 | Tuned copy: DPM++ 2M Karras + hires refinement pass |
 | SD15_Image2Img_LoRA.json | LoRA | 9 | 14 | LoRA |
+| SD15_Image2Img_LoRA_improved.json | LoRA, refined | 9 | 14 | Tuned copy: DPM++ 2M Karras + hires refinement pass |
 | SD15_Text2Img.json | T2I | 7 | 9 | T2I |
 | SD15_Text2Img_Balanced.json | T2I, refined | 9 | 14 | Tuned copy: 24 steps, CFG 6.5, 512→768 refinement pass |
-| framepack_i2v_workflow.json | FramePack, I2V | 14 | 18 | FramePack, I2V |
+| SD15_Text2Img_Draft.json | T2I, fast | 7 | 9 | Fastest: 8 steps, no refinement pass |
+| SD15_Text2Img_Max.json | T2I, best | 9 | 14 | Best quality: 32 steps, CFG 7, 512→768 refinement pass |
 | img2img_controlnet.json | ControlNet | 10 | 15 | ControlNet |
-| ltxv_i2v_2b_dev.json | LTX-Video, I2V | 15 | 19 | LTX-Video, I2V |
+| img2img_controlnet_improved.json | ControlNet, refined | 10 | 15 | Tuned copy: DPM++ 2M Karras + hires refinement pass |
 | ltxv_i2v_2b_distilled.json | LTX-Video, I2V | 15 | 19 | LTX-Video, I2V |
 
 ## Detailed descriptions
@@ -352,14 +357,6 @@ ComfyUI installation.
 - Features: Standard
 - Nodes/Links: 14/18
 - Key nodes: LoadFramePackModel, FramePackSampler, FramePackFindNearestBucket, VAEDecodeTiled, VHS_VideoCombine, LoadImage, CLIPTextEncode, CLIPVisionLoader, DualCLIPLoader
-
-### SD15_ControlNet_Pose.json
-
-- Family: ControlNet
-- Task: N/A
-- Features: Standard
-- Nodes/Links: 10/15
-- Key nodes: CheckpointLoaderSimple, KSampler, VAEDecode, SaveImage, ControlNetLoader, ControlNetApplyAdvanced, LoadImage, CLIPTextEncode
 
 ### SD15_ControlNet_Pose_dwpose.json
 
@@ -401,14 +398,6 @@ ComfyUI installation.
 - Nodes/Links: 7/9
 - Key nodes: CheckpointLoaderSimple, KSampler, VAEDecode, SaveImage, CLIPTextEncode
 
-### framepack_i2v_workflow.json
-
-- Family: FramePack
-- Task: I2V
-- Features: Standard
-- Nodes/Links: 14/18
-- Key nodes: LoadFramePackModel, FramePackSampler, FramePackFindNearestBucket, VAEDecodeTiled, VHS_VideoCombine, LoadImage, CLIPTextEncode, CLIPVisionLoader, DualCLIPLoader
-
 ### img2img_controlnet.json
 
 - Family: ControlNet
@@ -416,14 +405,6 @@ ComfyUI installation.
 - Features: ControlNet
 - Nodes/Links: 10/15
 - Key nodes: CheckpointLoaderSimple, KSampler, VAEDecode, SaveImage, ControlNetLoader, ControlNetApplyAdvanced, LoadImage, CLIPTextEncode
-
-### ltxv_i2v_2b_dev.json
-
-- Family: LTX-Video
-- Task: I2V
-- Features: Standard
-- Nodes/Links: 15/19
-- Key nodes: LTXVImgToVideo, LTXVConditioning, CheckpointLoaderSimple, KSamplerSelect, VAEDecode, SaveVideo, LoadImage, CLIPTextEncode
 
 ### ltxv_i2v_2b_distilled.json
 
@@ -435,4 +416,7 @@ ComfyUI installation.
 
 ---
 
-**Note:** FramePack_I2V.json and framepack_i2v_workflow.json are near-duplicates; they differ in CLIPTextEncode prompt text (framepack_i2v_workflow.json includes dancing woman).
+**Note:** Superseded learning-day workflows live in `archive/` — the manual-pose
+`SD15_ControlNet_Pose`, the `framepack_i2v_workflow` duplicate, and the slow
+`ltxv_i2v_2b_dev` template. Nothing is deleted; move a file back to the root folder to
+restore it.

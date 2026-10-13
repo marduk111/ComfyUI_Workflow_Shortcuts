@@ -94,7 +94,9 @@ Report the **filename** back to them. Images land in
 | Request | Workflow file | Takes |
 |---|---|---|
 | Text → image | `SD15_Text2Img.json` | ~10 s |
+| Text → image, best quality | `SD15_Text2Img_Max.json` | ~40 s |
 | Photo → restyled image | `SD15_Image2Img.json` | ~10 s |
+| Photo → restyled image, better quality | `SD15_Image2Img_Balanced.json` | ~30 s |
 | Photo + style LoRA | `SD15_Image2Img_LoRA.json` | ~15 s |
 | Make a photo follow a pose | `SD15_ControlNet_Pose_dwpose.json` | ~30 s |
 | Photo → short video, quick | `ltxv_i2v_2b_distilled.json` | ~2 s |
