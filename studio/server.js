@@ -134,8 +134,8 @@ async function ensureOpencode() {
   // "opencode" is a .ps1/.cmd shim on Windows; resolve a runnable entry point.
   let cmd = OPENCODE_EXE;
   if (OPENCODE_EXE === "opencode") {
-    const jsShim = "C:\\Users\\mardu\\AppData\\Roaming\\npm\\node_modules\\opencode-ai\\bin\\opencode.exe";
-    if (fs.existsSync(jsShim)) cmd = jsShim;
+    const jsShim = path.join(process.env.APPDATA || "", "npm", "node_modules", "opencode-ai", "bin", "opencode.exe");
+    if (jsShim && fs.existsSync(jsShim)) cmd = jsShim;
   }
 
   ocProc = spawn(cmd, args, spawnOpts);

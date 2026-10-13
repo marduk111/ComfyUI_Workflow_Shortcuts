@@ -12,3 +12,12 @@ Thumbs.db
 # plugin test renders and the demo clip (regenerate with test_render.js)
 studio/public/plugins/out/
 studio/public/plugins/demo.wav
+# never commit secrets or personal browser state
+.env
+.env.*
+*.pem
+*.key
+browser-profile/
+shots/
+harvest.jsonl
+*.sqlite

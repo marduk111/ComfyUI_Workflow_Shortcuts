@@ -5,7 +5,6 @@
     "comfyui": {
       "type": "local",
       "command": ["node", "studio/mcp-comfyui.js"],
-      "cwd": "C:\\Users\\mardu\\OneDrive\\Desktop\\ComfyUI_Workflow_Shortcuts",
       "enabled": true,
       "timeout": 30000
     }
