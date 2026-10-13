@@ -310,6 +310,9 @@ function handleOpencodeEvent(evt) {
 let comfyWs = null;
 let comfyRetry = null;
 let currentRun = null;   // { promptId, workflow, startedAt, nodes:{id:{state,value,max}} }
+let lastRunEndId = null; // ComfyUI sends executing(node=null) AND execution_success —
+                         // broadcast run_end once, with elapsed, whichever arrives first.
+let lastRunEndOk = null;
 
 function connectComfy() {
   try { comfyWs = new WebSocket(`${COMFY_URL.replace("http", "ws")}/ws?clientId=${COMFY_CLIENT_ID}`); }
@@ -340,6 +343,18 @@ function scheduleComfyRetry() {
   comfyRetry = setTimeout(connectComfy, 4000);
 }
 
+function endRun(payload) {
+  const id = payload.promptId || (currentRun && currentRun.promptId) || null;
+  const ended = id && id === lastRunEndId;
+  // Success: broadcast once. Error: broadcast unless an error was already sent —
+  // an error may legitimately arrive after a premature ok, and must override it.
+  if (ended && (payload.ok !== false || lastRunEndOk === false)) return;
+  lastRunEndId = id;
+  lastRunEndOk = payload.ok !== false;
+  const elapsed = currentRun && id && currentRun.promptId === id ? Date.now() - currentRun.startedAt : undefined;
+  broadcast("comfy_run_end", { ...payload, ...(typeof elapsed === "number" ? { elapsed } : {}) });
+}
+
 function handleComfyEvent(msg) {
   const d = msg.data || {};
 
@@ -349,6 +364,8 @@ function handleComfyEvent(msg) {
   }
   if (msg.type === "execution_start") {
     currentRun = { promptId: d.prompt_id, startedAt: Date.now(), nodes: {}, graph: currentRun ? currentRun.graph : null, workflow: currentRun ? currentRun.workflow : null };
+    lastRunEndId = null;
+    lastRunEndOk = null;
     broadcast("comfy_run_start", { promptId: d.prompt_id });
     return;
   }
@@ -359,12 +376,11 @@ function handleComfyEvent(msg) {
   }
   if (msg.type === "executing") {
     if (d.node == null) {
-      if (currentRun) broadcast("comfy_run_end", { promptId: currentRun.promptId, ok: true, elapsed: Date.now() - currentRun.startedAt });
-      currentRun = null;
+      endRun({ promptId: currentRun ? currentRun.promptId : d.prompt_id, ok: true });
       return;
     }
     setNode(d.node, "running", 0, 1);
-    broadcast("comfy_nodes", currentRun.nodes);
+    broadcast("comfy_nodes", currentRun ? currentRun.nodes : {});
     return;
   }
   if (msg.type === "progress_state" && d.nodes) {
@@ -385,13 +401,13 @@ function handleComfyEvent(msg) {
     return;
   }
   if (msg.type === "execution_success") {
-    broadcast("comfy_run_end", { promptId: d.prompt_id, ok: true });
+    endRun({ promptId: d.prompt_id, ok: true });
     return;
   }
   if (msg.type === "execution_error") {
     setNode(String(d.node_id), "error", 0, 1);
     broadcast("comfy_error", { nodeId: d.node_id, message: d.exception_message, details: d.traceback });
-    broadcast("comfy_run_end", { promptId: d.prompt_id, ok: false, message: d.exception_message });
+    endRun({ promptId: d.prompt_id, ok: false, message: d.exception_message });
     return;
   }
   if (msg.type === "validation_error") {
@@ -419,16 +435,42 @@ const MIME = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
   ".webp": "image/webp", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".webm": "video/webm",
   ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
+  ".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".ogg": "audio/ogg",
+  ".m4a": "audio/mp4", ".aac": "audio/aac", ".opus": "audio/ogg", ".mov": "video/quicktime",
 };
 
-function serveFile(res, absPath) {
+function serveFile(req, res, absPath) {
   fs.stat(absPath, (err, st) => {
     if (err || !st.isFile()) return fail(res, 404, "Not found");
-    res.writeHead(200, {
+    const headers = {
       "Content-Type": MIME[path.extname(absPath).toLowerCase()] || "application/octet-stream",
-      "Content-Length": st.size,
+      "Accept-Ranges": "bytes",
       "Cache-Control": "no-cache",
-    });
+    };
+    // Browsers ask for byte ranges on audio/video (seeking). Answer 206 properly,
+    // otherwise players abort the request and playback/seek breaks.
+    const m = req && req.headers.range ? /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range).trim()) : null;
+    if (m && (m[1] !== "" || m[2] !== "")) {
+      let start, end;
+      if (m[1] === "") {                       // suffix range: bytes=-500
+        start = Math.max(0, st.size - parseInt(m[2], 10) || 0);
+        end = st.size - 1;
+      } else {
+        start = parseInt(m[1], 10);
+        end = m[2] === "" ? st.size - 1 : Math.min(parseInt(m[2], 10), st.size - 1);
+      }
+      if (!(start <= end) || start >= st.size) {
+        res.writeHead(416, { "Content-Range": `bytes */${st.size}` });
+        return res.end();
+      }
+      res.writeHead(206, {
+        ...headers,
+        "Content-Range": `bytes ${start}-${end}/${st.size}`,
+        "Content-Length": end - start + 1,
+      });
+      return fs.createReadStream(absPath, { start, end }).pipe(res);
+    }
+    res.writeHead(200, { ...headers, "Content-Length": st.size });
     fs.createReadStream(absPath).pipe(res);
   });
 }
@@ -851,7 +893,7 @@ const server = http.createServer(async (req, res) => {
       const allowed = [COMFY_OUTPUT, COMFY_INPUT, path.join(DATA, "uploads"), projects.PROJECTS_DIR];
       const inAllowed = allowed.some((a) => abs === a || abs.startsWith(a + path.sep));
       if (!inAllowed) return fail(res, 403, "Outside allowed folders");
-      return serveFile(res, abs);
+      return serveFile(req, res, abs);
     }
 
     if (p === "/api/log" && req.method === "POST") {
@@ -877,7 +919,7 @@ const server = http.createServer(async (req, res) => {
       const rel = p.slice("/apps/".length).replace(/^\/+/, "");
       const abs = path.join(apps.APPS_DIR, path.normalize(rel).replace(/^(\.\.[\/\\])+/, ""));
       if (!abs.startsWith(apps.APPS_DIR)) return fail(res, 403, "Outside app folder");
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return serveFile(res, abs);
+      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return serveFile(req, res, abs);
       return fail(res, 404, "No such app page");
     }
 
@@ -906,13 +948,13 @@ const server = http.createServer(async (req, res) => {
     // browser screenshots, served back to the GUI / the agent
     if (p.startsWith("/shots/")) {
       const name = path.basename(p.slice("/shots/".length));
-      return serveFile(res, path.join(browser.SHOTS, name));
+      return serveFile(req, res, path.join(browser.SHOTS, name));
     }
 
     // ---- static GUI ----
     let rel = p === "/" ? "/index.html" : p;
     const abs = path.join(PUBLIC, path.normalize(rel).replace(/^(\.\.[\/\\])+/, ""));
-    if (abs.startsWith(PUBLIC)) return serveFile(res, abs);
+    if (abs.startsWith(PUBLIC)) return serveFile(req, res, abs);
     return fail(res, 404, "Not found");
   } catch (e) {
     log("ERROR", p, e.message);

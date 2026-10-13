@@ -81,17 +81,28 @@ async function main() {
     log("Studio is already running.");
   } else {
     log("Starting the studio...");
+    // Keep the studio's own log: start.js can't show it on this console,
+    // and "it didn't start" is undiagnosable without it. Fresh file per boot.
+    const logPath = path.join(__dirname, "data", "server.log");
+    let logFd = null;
+    try {
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      fs.writeFileSync(logPath, `--- studio server start ${new Date().toISOString()} ---\n`);
+      logFd = fs.openSync(logPath, "a");
+    } catch { /* console-only fallback */ }
     const child = spawn(process.execPath, [path.join(__dirname, "server.js")], {
       cwd: ROOT,
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", logFd, logFd],
     });
     child.unref();
+    if (logFd != null) try { fs.closeSync(logFd); } catch {}
     const ok = await waitFor(STUDIO_PORT, "the studio", 45000);
     if (!ok) {
       console.log("");
       console.log("  Something went wrong starting the studio.");
-      console.log("  Try running:  node studio/server.js");
+      console.log("  Details are in:  studio\\data\\server.log");
+      console.log("  Or try running:  node studio/server.js");
       console.log("");
       process.exit(1);
     }

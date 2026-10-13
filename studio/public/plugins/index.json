@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-10T04:56:40.468Z",
+  "generatedAt": "2026-10-13T09:15:15.293Z",
   "plugins": [
     {
       "id": "stem-instrument-repair",
@@ -8,7 +8,7 @@
       "description": "A conventional stem-cleanup effect that focuses broad instrument body, reduces competing bleed emphasis, smooths uneven dynamics while retaining attacks, and adds restrained continuity saturation. It does not perform source separation, neural instrument recognition, pitch correction, or spectral reconstruction.",
       "parameters": 7,
       "processorName": "plugin_stem_instrument_repair",
-      "builtAt": "2026-10-10T04:56:40.465Z",
+      "builtAt": "2026-10-13T09:15:15.290Z",
       "worklet": "/plugins/stem-instrument-repair/plugin_stem_instrument_repair.js",
       "manifestUrl": "/plugins/stem-instrument-repair/manifest.json"
     }

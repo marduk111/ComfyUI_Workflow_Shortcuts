@@ -251,6 +251,9 @@ Quality modes: **draft** (fastest), **balanced** (default, ~25 s), **max** (~40 
   studio works around it itself, and `INSTALL.bat`/`START_STUDIO.bat` are not
   affected.
 - **Restarting:** close the black window and double-click `START_STUDIO.bat` again.
+- **The studio won't start / acts strangely** — its own log is at
+  `studio\data\server.log` (rewritten on every start). If you need to report a
+  problem, that file is the first thing to look at.
 
 ## Advanced configuration
 

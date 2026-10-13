@@ -637,10 +637,17 @@ const TOOLS = {
     description: "Render a plugin's DSP graph offline over a WAV and verify it (bypass, finiteness, real change).",
     args: '<plugin.json> [input.wav] [seconds=8]',
     async run(a) {
-      const target = a.workflow || a._pos;
+      // parseArgs files anything ending in .json as `workflow`; remaining
+      // positionals land in `_pos` (space-joined). So the input WAV may be
+      // in `_pos` whether or not the plugin file was recognized.
+      const pos = String(a._pos || "").split(/\s+/).filter(Boolean);
+      const target = a.workflow || pos[0];
       if (!target) return { error: "plugin file required, e.g. plugin_test plugins/Stem_Instrument_Repair.json" };
+      const input = a.input || (a.workflow ? pos[0] : pos[1]);
       const args = [path.join(__dirname, "plugins", "test_render.js"), target];
-      if (a.input) args.push(a.input);
+      // test_render.js reads positional args as <plugin> <input.wav> <seconds>,
+      // so the input slot must be filled before seconds can be passed.
+      if (input || a.seconds) args.push(input || path.join(INPUT_DIR, "test_song.wav"));
       if (a.seconds) args.push(String(a.seconds));
       const r = await runNodeJson(args);
       if (r.error) return r;

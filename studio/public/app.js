@@ -167,7 +167,6 @@ function step(text, kind = "") {
   li.innerHTML = `${esc(text)}<span class="st-time">${new Date().toLocaleTimeString()}</span>`;
   $("#steps-list").prepend(li);
   state.steps.unshift({ text, kind });
-  $("#tab-results") && ($(".side-empty") ? null : null);
   const empty = $("#steps-list").parentElement.querySelector(".side-empty");
   if (empty) empty.classList.add("hidden");
 }
@@ -176,8 +175,6 @@ function step(text, kind = "") {
 async function loadStatus() {
   try {
     const s = await (await fetch("/api/status")).json();
-    if (s.inputDir) state.inputDir = s.inputDir;
-    if (s.outputDir) state.outputDir = s.outputDir;
     setSvc("svc-opencode", s.opencode && s.opencode.connected);
     setSvc("svc-comfyui", s.comfy && s.comfy.connected);
     setSvc("svc-ollama", s.ollama && s.ollama.connected);
@@ -1167,19 +1164,23 @@ async function loadResults() {
   try {
     const r = await (await fetch("/api/results?limit=30")).json();
     const fresh = (r.results || []).filter((x) => /\.(png|jpg|jpeg|webp|gif|mp4|webm|mov|mp3|wav|flac|ogg|m4a|opus)$/i.test(x.name));
-    const prev = new Set(state.results.map((x) => x.url));
     state.results = fresh;
     renderResults();
-    for (const f of fresh) if (!prev.has(f.url)) { /* new since last poll */ }
   } catch {}
 }
 function addResult(item) {
   state.results.unshift(item);
   renderResults();
 }
+let lastResultsSig = null;
 function renderResults() {
   const g = $("#results-grid");
   const empty = $("#results-empty");
+  // Rebuilding innerHTML kills any <audio>/<video> the user is listening to.
+  // The 6s poll only needs to redraw when the list actually changed.
+  const sig = state.results.map((r) => r.url + "|" + (r.mtime || "")).join("\n");
+  if (sig === lastResultsSig) return;
+  lastResultsSig = sig;
   if (!state.results.length) { g.innerHTML = ""; empty.classList.remove("hidden"); return; }
   empty.classList.add("hidden");
   g.innerHTML = state.results.map((r) => {
