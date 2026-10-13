@@ -97,64 +97,9 @@ function convertWorkflow(graph, specIndex) {
       inputs[inp.name] = [String(fromNode), fromSlot];
     }
 
-    // 2. Widgets: primitive values saved alongside the node, in declaration order.
-    //    Some graphs store this as a {name:value} map instead of an array.
-    const values = node.widgets_values;
-    const widgets = spec.filter((e) => !e.socket);
-    if (values && !Array.isArray(values) && typeof values === "object") {
-      for (const entry of widgets) {
-        if (entry.name in values) inputs[entry.name] = values[entry.name];
-      }
-    } else {
-      const list = Array.isArray(values) ? values : [];
-      let wi = 0;
-      let shifted = false;
-      for (const entry of widgets) {
-        if (inputs[entry.name] !== undefined) continue;
-        if (wi >= list.length) break;
-        // A graph saved on another node version can have shifted widgets, so take
-        // the first remaining value that actually fits this input's type.
-        let idx = -1;
-        for (let i = wi; i < list.length; i++) if (typeOk(entry, list[i])) { idx = i; break; }
-        if (idx === -1) break;
-        if (idx > wi) shifted = true;
-        const value = list[idx];
-        inputs[entry.name] = value;
-        let next = idx + 1;
-        const trailing = list[next];
-        // ComfyUI saves a hidden "randomize/fixed" widget right after a seed, but
-        // not every node declares control_after_generate, so also detect it by value.
-        const hasControl = (entry.opts && entry.opts.control_after_generate) ||
-          (/seed/i.test(entry.name) && typeof value === "number" && typeof trailing === "string" &&
-            /^(randomize|fixed|increment|decrement)$/.test(trailing));
-        if (hasControl) next++;
-        wi = next;
-      }
-
-      // 2b. Version drift: the graph holds more widget values than this node now
-      //     declares (VHS gained pix_fmt/crf and later lost them). Only when a
-      //     shift was actually detected, re-anchor the tail so trailing flags such
-      //     as save_output land on the right values.
-      if (shifted && list.length > widgets.length && widgets.length) {
-        const n = widgets.length;
-        const m = list.length;
-        let r = 0;
-        for (let k = 1; k <= Math.min(n, m); k++) {
-          let ok = true;
-          for (let j = 0; j < k; j++) if (!typeOk(widgets[n - 1 - j], list[m - 1 - j])) { ok = false; break; }
-          if (!ok) break;
-          r = k;
-        }
-        const changed = [];
-        for (let j = 0; j < r; j++) {
-          const e = widgets[n - 1 - j];
-          const v = list[m - 1 - j];
-          if (inputs[e.name] !== v) changed.push(`${e.name}: ${JSON.stringify(inputs[e.name])} -> ${JSON.stringify(v)}`);
-          inputs[e.name] = v;
-        }
-        if (changed.length) warnings.push(`Node ${node.id} (${cls}): saved widgets are shifted for this node version - realigned ${changed.join(", ")}.`);
-      }
-    }
+    // 2. Widgets: primitive values saved alongside the node.
+    const mapped = mapWidgets(node.widgets_values, spec, inputs);
+    for (const w of mapped.warnings) warnings.push(`Node ${node.id} (${cls}): ${w}`);
 
     // 3. Schema drift: a workflow saved on another ComfyUI version can be missing
     //    required inputs (SaveVideo gained a `codec` field). Fill them with the
@@ -172,6 +117,80 @@ function convertWorkflow(graph, specIndex) {
   }
 
   return { prompt, warnings, missingTypes: [...missingTypes] };
+}
+
+// Maps a node's saved widget values (positional array or {name:value} map)
+// onto its declared inputs. `inputs` is pre-seeded with socket connections -
+// widget values never overwrite a wired socket. Returns the widget-name ->
+// value/index map so callers that need to EDIT a specific widget (quality
+// tuning) write to exactly the slot convertWorkflow reads back.
+function mapWidgets(values, spec, inputs) {
+  const warnings = [];
+  const index = {};
+  const widgets = spec.filter((e) => !e.socket);
+
+  if (values && !Array.isArray(values) && typeof values === "object") {
+    for (const entry of widgets) {
+      if (entry.name in values) {
+        if (inputs[entry.name] === undefined) inputs[entry.name] = values[entry.name];
+        index[entry.name] = entry.name;
+      }
+    }
+    return { warnings, index, objectStyle: true };
+  }
+
+  const list = Array.isArray(values) ? values : [];
+  let wi = 0;
+  let shifted = false;
+  for (const entry of widgets) {
+    if (inputs[entry.name] !== undefined) continue;
+    if (wi >= list.length) break;
+    // A graph saved on another node version can have shifted widgets, so take
+    // the first remaining value that actually fits this input's type.
+    let idx = -1;
+    for (let i = wi; i < list.length; i++) if (typeOk(entry, list[i])) { idx = i; break; }
+    if (idx === -1) break;
+    if (idx > wi) shifted = true;
+    const value = list[idx];
+    inputs[entry.name] = value;
+    index[entry.name] = idx;
+    let next = idx + 1;
+    const trailing = list[next];
+    // ComfyUI saves a hidden "randomize/fixed" widget right after a seed, but
+    // not every node declares control_after_generate, so also detect it by value.
+    const hasControl = (entry.opts && entry.opts.control_after_generate) ||
+      (/seed/i.test(entry.name) && typeof value === "number" && typeof trailing === "string" &&
+        /^(randomize|fixed|increment|decrement)$/.test(trailing));
+    if (hasControl) next++;
+    wi = next;
+  }
+
+  // Version drift: the graph holds more widget values than this node now
+  // declares (VHS gained pix_fmt/crf and later lost them). Only when a
+  // shift was actually detected, re-anchor the tail so trailing flags such
+  // as save_output land on the right values.
+  if (shifted && list.length > widgets.length && widgets.length) {
+    const n = widgets.length;
+    const m = list.length;
+    let r = 0;
+    for (let k = 1; k <= Math.min(n, m); k++) {
+      let ok = true;
+      for (let j = 0; j < k; j++) if (!typeOk(widgets[n - 1 - j], list[m - 1 - j])) { ok = false; break; }
+      if (!ok) break;
+      r = k;
+    }
+    const changed = [];
+    for (let j = 0; j < r; j++) {
+      const e = widgets[n - 1 - j];
+      const v = list[m - 1 - j];
+      if (inputs[e.name] !== v) changed.push(`${e.name}: ${JSON.stringify(inputs[e.name])} -> ${JSON.stringify(v)}`);
+      inputs[e.name] = v;
+      index[e.name] = m - 1 - j;
+    }
+    if (changed.length) warnings.push(`saved widgets are shifted for this node version - realigned ${changed.join(", ")}.`);
+  }
+
+  return { warnings, index, objectStyle: false };
 }
 
 // Best-effort value for a widget input the saved graph did not provide.
@@ -192,14 +211,22 @@ function defaultFor(entry) {
   return undefined;
 }
 
+// Saved widget values arrive either as a positional array or (newer graphs)
+// as a {name:value} map - normalize to a value list for scanning.
+function widgetValueList(node) {
+  const values = node.widgets_values;
+  if (Array.isArray(values)) return values;
+  if (values && typeof values === "object") return Object.values(values);
+  return [];
+}
+
 // Reads an uploaded filename out of any LoadImage-style node so the caller can
 // tell the GUI which assets the workflow expects.
 function findImageInputs(graph) {
   const names = new Set();
   for (const node of graph.nodes || []) {
     if (!/loadimage|loadvideo|loadaudio|imageupload/i.test(node.type)) continue;
-    const values = node.widgets_values || [];
-    for (const v of values) if (typeof v === "string" && v.trim()) names.add(v);
+    for (const v of widgetValueList(node)) if (typeof v === "string" && v.trim()) names.add(v);
   }
   return [...names];
 }
@@ -234,7 +261,7 @@ function findPromptNodes(graph) {
   const out = [];
   for (const node of graph.nodes || []) {
     if (node.type !== "CLIPTextEncode") continue;
-    const values = node.widgets_values || [];
+    const values = widgetValueList(node);
     const text = values.find((v) => typeof v === "string") || "";
 
     let role = null;
@@ -279,4 +306,4 @@ function pickNegativePromptNode(prompts, positiveNode) {
   return prompts.find((p) => positiveNode && p.id !== positiveNode.id) || null;
 }
 
-module.exports = { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes, pickPositivePromptNode, pickNegativePromptNode, isSocketType };
+module.exports = { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes, pickPositivePromptNode, pickNegativePromptNode, isSocketType, widgetValueList, mapWidgets };

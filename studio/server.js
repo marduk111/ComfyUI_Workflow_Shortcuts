@@ -641,17 +641,23 @@ const server = http.createServer(async (req, res) => {
     // ---- workflow catalogue ----
     if (p === "/api/workflows") {
       const files = fs.readdirSync(ROOT).filter((f) => f.endsWith(".json"));
-      const out = files.map((f) => {
+      const out = [];
+      for (const f of files) {
         try {
           const g = JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
-          const types = [...new Set((g.nodes || []).map((n) => n.type))];
+          if (!Array.isArray(g.nodes) || !g.nodes.length) continue; // package.json, opencode.json, ...
+          const types = [...new Set(g.nodes.map((n) => n.type))];
           const family = types.some((t) => /framepack/i.test(t)) ? "FramePack"
             : types.some((t) => /ltxv/i.test(t)) ? "LTX-Video"
-            : types.some((t) => /controlnet/i.test(t)) ? "ControlNet" : "SD1.5";
-          const task = /SaveVideo|VHS_VideoCombine|FramePack|LTXV/i.test(types.join(",")) ? "Video" : "Image";
-          return { file: f, family, task, nodes: (g.nodes || []).length, types, imageInputs: findImageInputs(g), promptNodes: findPromptNodes(g).map((n) => n.id) };
-        } catch { return { file: f, error: true }; }
-      });
+            : types.some((t) => /controlnet/i.test(t)) ? "ControlNet"
+            : types.some((t) => /savevideo|vhs_videocombine|createvideo/i.test(t)) ? "Video"
+            : types.some((t) => /loadaudio|separation|saveaudiomp3|audio/i.test(t)) ? "Audio"
+            : "SD1.5";
+          const task = /SaveVideo|VHS_VideoCombine|FramePack|LTXV/i.test(types.join(",")) ? "Video"
+            : family === "Audio" ? "Audio" : "Image";
+          out.push({ file: f, family, task, nodes: g.nodes.length, types, imageInputs: findImageInputs(g), promptNodes: findPromptNodes(g).map((n) => n.id) });
+        } catch { /* unparseable json - skip */ }
+      }
       return json(res, 200, { workflows: out });
     }
 

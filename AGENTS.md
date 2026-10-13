@@ -30,6 +30,9 @@ permission popup. Every other `bash` call will, so prefer this one.
 | `set_prompt <file> positive="..."` | Permanently rewrite a workflow's saved prompt. |
 | `set_image <file> filename="x.png"` | Permanently point a workflow at an input image. |
 | `set_audio <file> filename="song.mp3"` | Permanently point a workflow at an input audio file. |
+| `wf_audit <file>` | Score a workflow 0-100 for output quality (sampler, steps, CFG, hires pass, VRAM budget...). Use when they say results look bad. |
+| `wf_improve <file> [hires=true] [steps=] [cfg=] [denoise=]` | Write a fixed, better-scoring copy as `<name>_improved.json`. Never edits the original. |
+| `wf_build task=t2i\|i2i [quality=draft\|balanced\|max] [positive="..."] [width=] [height=]` | Build a fresh tuned workflow from scratch. `draft` fastest, `balanced` (default) adds a hires refinement pass, `max` = slowest/best. |
 | `plugin_list` | Audio effect definitions on disk and which are built. |
 | `plugin_test <plugin.json> [input.wav]` | Prove a plugin's DSP graph works before shipping it. |
 | `plugin_build <plugin.json>\|all` | Compile a plugin into a browser-playable AudioWorklet. |
@@ -101,6 +104,14 @@ Report the **filename** back to them. Images land in
 
 **Lead with LTX** when they want a video: it is seconds instead of 20 minutes. Only reach
 for FramePack if they want a longer or better clip, and warn them about the wait first.
+
+### Quality — when they say it looks bad
+
+1. `wf_audit <file>` to see what's wrong (weak sampler, too few steps, no refinement pass...).
+2. `wf_improve <file> hires=true` for a fixed copy, then run that — or `wf_build task=t2i
+   quality=balanced` for a fresh one. `quality=draft` when speed matters, `quality=max`
+   when they want the best this card can do (~40 s on the RTX 3050 6GB).
+3. Never hand-edit the saved originals — `wf_improve` writes `<name>_improved.json`.
 
 ## Song and stem work
 

@@ -128,6 +128,13 @@ things, or post publicly unless you explicitly ask for that exact action.
 | Short video (fast model) | a few seconds |
 | Better video (FramePack) | **15–20 minutes** — the AI will warn you first |
 
+### Images looking low quality?
+
+Just say so in the chat ("these look blurry" / "the AI art looks cheap"). The AI will
+score the workflow, then either fix it or build a sharper one — better sampler, more
+steps, and a two-pass *refinement* that draws at 512 px and then re-draws at 768 px.
+Quality modes: **draft** (fastest), **balanced** (default, ~25 s), **max** (~40 s).
+
 ### If something goes wrong
 
 - **Black window says ComfyUI failed** — it usually means another program is
@@ -150,6 +157,7 @@ things, or post publicly unless you explicitly ask for that exact action.
 | `studio/comfy_tools.js` | The operations behind that CLI |
 | `studio/projects.js` | One folder per project: assets, workflows, results |
 | `studio/convert.js` | Turns these visual workflows into API payloads |
+| `studio/workflow_quality.js` | Scores workflows for output quality (`wf_audit`), fixes them (`wf_improve`), builds tuned ones from scratch (`wf_build`) |
 | `studio/plugins/graph.js` | DSP graph engine (same code runs offline and in the browser) |
 | `studio/plugins/build.js` | Compiles a plugin definition into a browser AudioWorklet |
 | `studio/plugins/test_render.js` | Proves a plugin works before it is built |
@@ -194,8 +202,10 @@ Organised collection of workflow shortcut JSON files from Desktop, reviewed agai
 | SD15_ControlNet_Pose_dwpose.json | ControlNet, DWPose | 11 | 14 | ControlNet, DWPose |
 | SD15_ControlNet_Pose_refphoto.json | ControlNet, Pose | 12 | 17 | ControlNet, Pose |
 | SD15_Image2Img.json | Generic | 8 | 12 | Generic |
+| SD15_Image2Img_improved.json | Generic, refined | 10 | 15 | Tuned copy: DPM++ 2M Karras + hires refinement pass |
 | SD15_Image2Img_LoRA.json | LoRA | 9 | 14 | LoRA |
 | SD15_Text2Img.json | T2I | 7 | 9 | T2I |
+| SD15_Text2Img_Balanced.json | T2I, refined | 9 | 14 | Tuned copy: 24 steps, CFG 6.5, 512→768 refinement pass |
 | framepack_i2v_workflow.json | FramePack, I2V | 14 | 18 | FramePack, I2V |
 | img2img_controlnet.json | ControlNet | 10 | 15 | ControlNet |
 | ltxv_i2v_2b_dev.json | LTX-Video, I2V | 15 | 19 | LTX-Video, I2V |

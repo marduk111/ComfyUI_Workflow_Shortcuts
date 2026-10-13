@@ -21,7 +21,8 @@ const LAST_RUN_FILE = path.join(__dirname, "data", ".last_run.json");
 // execution events to the GUI's animation panel.
 const CLIENT_ID = "ai-studio";
 
-const { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes, pickPositivePromptNode, pickNegativePromptNode } = require("./convert.js");
+const { convertWorkflow, buildObjectInfoIndex, findImageInputs, findPromptNodes, pickPositivePromptNode, pickNegativePromptNode, widgetValueList } = require("./convert.js");
+const workflowQuality = require("./workflow_quality.js");
 const projects = require("./projects.js");
 const apps = require("./apps.js");
 const capabilities = require("./capabilities.js");
@@ -52,6 +53,7 @@ function listWorkflowFiles() {
   return fs.readdirSync(ROOT).filter((f) => f.endsWith(".json")).map((f) => {
     try {
       const g = JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
+      if (!Array.isArray(g.nodes)) return null; // package.json, opencode.json, etc.
       const nodes = (g.nodes || []).map((n) => n.type);
       const families = new Set();
       for (const n of nodes) {
@@ -73,7 +75,7 @@ function listWorkflowFiles() {
     } catch (e) {
       return { file: f, error: String(e.message) };
     }
-  });
+  }).filter(Boolean);
 }
 
 // In-memory edits: `run` uses these so the saved workflow library is never
@@ -85,15 +87,24 @@ function applyPromptToGraph(g, positive, negative, promptNodeId) {
   const target = pickPositivePromptNode(prompts, promptNodeId);
   if (!target) return { error: `No prompt node ${promptNodeId}`, available: prompts };
   const node = g.nodes.find((n) => n.id === target.id);
-  const idx = (node.widgets_values || []).findIndex((v) => typeof v === "string");
-  if (idx < 0) node.widgets_values.push(positive); else node.widgets_values[idx] = positive;
+  if (node.widgets_values && !Array.isArray(node.widgets_values)) {
+    // Object-style widget map: find the text field.
+    for (const [k, v] of Object.entries(node.widgets_values)) if (typeof v === "string") { node.widgets_values[k] = positive; break; }
+  } else {
+    const idx = (node.widgets_values || []).findIndex((v) => typeof v === "string");
+    if (idx < 0) node.widgets_values.push(positive); else node.widgets_values[idx] = positive;
+  }
   let negativeSet = false;
   if (negative) {
     const other = pickNegativePromptNode(prompts, target);
     if (other) {
       const on = g.nodes.find((n) => n.id === other.id);
-      const oi = (on.widgets_values || []).findIndex((v) => typeof v === "string");
-      if (oi >= 0) { on.widgets_values[oi] = negative; negativeSet = true; }
+      if (on.widgets_values && !Array.isArray(on.widgets_values)) {
+        for (const [k, v] of Object.entries(on.widgets_values)) if (typeof v === "string") { on.widgets_values[k] = negative; negativeSet = true; break; }
+      } else {
+        const oi = (on.widgets_values || []).findIndex((v) => typeof v === "string");
+        if (oi >= 0) { on.widgets_values[oi] = negative; negativeSet = true; }
+      }
     }
   }
   return { updated: true, promptNodeId: target.id, negativeSet };
@@ -103,9 +114,14 @@ function applyImageToGraph(g, filename, nodeId) {
   const targets = (g.nodes || []).filter((n) => /loadimage|imageupload/i.test(n.type));
   const node = nodeId != null ? targets.find((n) => String(n.id) === String(nodeId)) : targets[0];
   if (!node) return { error: "Workflow has no LoadImage node" };
-  const idx = (node.widgets_values || []).findIndex((v) => typeof v === "string");
+  const wv = node.widgets_values;
+  if (wv && !Array.isArray(wv) && typeof wv === "object") {
+    for (const [k, v] of Object.entries(wv)) if (typeof v === "string") { wv[k] = filename; return { updated: true, nodeId: node.id, filename }; }
+    return { error: "LoadImage node has no filename widget" };
+  }
+  const idx = (wv || []).findIndex((v) => typeof v === "string");
   if (idx < 0) return { error: "LoadImage node has no filename widget" };
-  node.widgets_values[idx] = filename;
+  wv[idx] = filename;
   return { updated: true, nodeId: node.id, filename };
 }
 
@@ -230,6 +246,70 @@ const TOOLS = {
       if (res.error) return res;
       fs.writeFileSync(file, JSON.stringify(g, null, 2));
       return { ...res, file: path.basename(file) };
+    },
+  },
+
+  /* ---------------- workflow quality ---------------- */
+
+  wf_audit: {
+    description: "Score a saved workflow for image quality (0-100) and list concrete problems with fixes, tuned for this 6 GB card.",
+    args: "<workflow.json>",
+    async run(a) {
+      if (!a.workflow && a._pos) a.workflow = a._pos.trim();
+      if (!a.workflow) return { error: "Usage: node studio/studio.js wf_audit SD15_Text2Img.json" };
+      const file = path.join(ROOT, path.basename(a.workflow));
+      if (!fs.existsSync(file)) return { error: `No workflow named ${a.workflow}` };
+      await loadObjectInfo();
+      const g = JSON.parse(fs.readFileSync(file, "utf8"));
+      const audit = workflowQuality.auditWorkflow(g, { specIndex, objectInfo });
+      return { file: path.basename(file), ...audit };
+    },
+  },
+
+  wf_improve: {
+    description: "Write an improved COPY of a workflow (better sampler/scheduler/steps/CFG/negative prompt). The original file is never touched.",
+    args: '<workflow.json> [out=name.json] [hires=true] [steps=24] [cfg=6.5] [denoise=0.6]',
+    async run(a) {
+      if (!a.workflow && a._pos) a.workflow = a._pos.trim();
+      if (!a.workflow) return { error: "Usage: node studio/studio.js wf_improve SD15_Text2Img.json [hires=true]" };
+      const src = path.join(ROOT, path.basename(a.workflow));
+      if (!fs.existsSync(src)) return { error: `No workflow named ${a.workflow}` };
+      await loadObjectInfo();
+      const g = JSON.parse(fs.readFileSync(src, "utf8"));
+      const before = workflowQuality.auditWorkflow(g, { specIndex, objectInfo });
+      const r = workflowQuality.improveWorkflow(g, { specIndex, objectInfo }, a);
+      if (r.skipped) return { skipped: r.skipped, audit: before };
+      const outName = a.out ? path.basename(String(a.out)) : path.basename(a.workflow).replace(/\.json$/i, "") + "_improved.json";
+      const outPath = path.join(ROOT, outName);
+      if (outPath === src) return { error: "out= would overwrite the original - pick a different name (a copy is the default)." };
+      const { warnings, missingTypes } = convertWorkflow(r.graph, specIndex);
+      if (missingTypes.length) return { error: `Cannot save - ComfyUI is missing nodes: ${missingTypes.join(", ")}` };
+      fs.writeFileSync(outPath, JSON.stringify(r.graph, null, 2));
+      const after = workflowQuality.auditWorkflow(r.graph, { specIndex, objectInfo });
+      return {
+        file: outName, changes: r.changes, warnings,
+        scoreBefore: before.score, scoreAfter: after.score,
+        summary: after.summary,
+        hint: `Try it: node studio/studio.js run ${outName} positive="..." seed=random`,
+      };
+    },
+  },
+
+  wf_build: {
+    description: "Generate a new best-practice image workflow for this machine (DPM++ 2M Karras, right steps/CFG, optional 1.5x refine pass).",
+    args: 'task=t2i|i2i [quality=draft|balanced|max] [model=...] [width=512] [height=512] [positive="..."] [out=name.json]',
+    async run(a) {
+      await loadObjectInfo();
+      const r = workflowQuality.buildWorkflow({ specIndex, objectInfo }, a);
+      if (r.error) return r;
+      const outName = a.out ? path.basename(String(a.out)) : r.file;
+      const outPath = path.join(ROOT, outName);
+      if (fs.existsSync(outPath) && !a.overwrite) {
+        return { error: `${outName} already exists - pass out=<other name>.json or overwrite=true` };
+      }
+      fs.writeFileSync(outPath, JSON.stringify(r.graph, null, 2));
+      const { file, graph, ...rest } = r;
+      return { ...rest, file: outName, hint: `Run it: node studio/studio.js run ${outName} positive="..." seed=random` };
     },
   },
 

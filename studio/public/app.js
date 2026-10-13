@@ -34,6 +34,7 @@ const NODE_TITLES = {
   LoadFramePackModel: "Load FramePack model",
   DownloadAndLoadFramePackModel: "Download FramePack model",
   LoadFramePackModelGguf: "Load FramePack GGUF",
+  CLIPLoader: "Load text encoder",
   CLIPTextEncode: "Write prompt",
   CLIPVisionEncode: "Encode image",
   EmptyLatentImage: "Create blank canvas",
@@ -45,20 +46,22 @@ const NODE_TITLES = {
   SaveImage: "Save the picture",
   SaveVideo: "Save the video",
   VHS_VideoCombine: "Combine frames into video",
+  CreateVideo: "Assemble frames into video",
   LoadImage: "Your uploaded photo",
+  LoadAudio: "Your song",
   ControlNetLoader: "Load pose control",
   ControlNetApplyAdvanced: "Apply pose control",
   LoadImageMask: "Load mask",
-  CheckpointLoaderSimple: "Load model",
   LTXVImgToVideo: "Turn photo into video",
   LTXVConditioning: "Set video motion",
   KSamplerSelect: "Choose sampler",
-  SamplerCustom: "Sample",
+  SamplerCustom: "Draw the result (sampling)",
+  LTXVScheduler: "Plan how frames are drawn",
   GetImageSizeAndCount: "Measure image size",
   ImageResizePlus: "Resize image",
   ImageResize: "Resize image",
+  ImageScale: "Resize picture",
   FramePackFindNearestBucket: "Match video size",
-  CLIPVisionEncode: "Encode image for vision",
   ConditioningZeroOut: "Empty conditioning",
   VAELoader: "Load VAE",
   TextEncodeLTXV: "Describe the motion",
@@ -70,23 +73,70 @@ const NODE_TITLES = {
   GetNode: "Reuse a value",
   SetNode: "Store a value",
   LoraLoader: "Apply style (LoRA)",
+  LatentUpscaleBy: "Enlarge + refine (2nd pass)",
+  AudioSeparation: "Split song into stems",
+  AudioCombine: "Mix stems together",
+  AudioAdjustVolume: "Change loudness",
+  AudioCrop: "Cut a section",
+  AudioConcat: "Join sections",
+  AudioSpeedShift: "Change speed",
+  AudioEqualizer3Band: "Equalizer (bass/mids/treble)",
+  SaveAudioMP3: "Save as MP3",
+  DWPreprocessor: "Detect pose in photo",
+  SDPoseKeypointExtractor: "Read pose points",
+  SDPoseDrawKeypoints: "Draw pose skeleton",
 };
 
 const EXPLAIN = {
-  CheckpointLoaderSimple: "Loading the AI model into memory.",
+  CheckpointLoaderSimple: "Loading the AI model into memory - one-time per run.",
+  DualCLIPLoader: "Loading the text encoders that understand your prompt.",
+  CLIPLoader: "Loading the text encoder that understands your prompt.",
+  CLIPVisionLoader: "Loading the vision model that reads your photo.",
+  CLIPVisionEncode: "Analyzing your photo so the AI can match its look.",
   CLIPTextEncode: "Turning your words into numbers the AI understands.",
   EmptyLatentImage: "Creating a blank canvas at the requested size.",
-  KSampler: "Drawing the image one step at a time — this is the slow part.",
+  KSampler: "Drawing the image one step at a time - this is the slow part.",
+  SamplerCustom: "Drawing the result one step at a time - this is the slow part.",
+  KSamplerSelect: "Choosing the drawing algorithm.",
+  LTXVScheduler: "Planning how the video frames get drawn, oldest to newest.",
   VAEDecode: "Converting the internal data into a viewable picture.",
+  VAEDecodeTiled: "Converting the internal data into a viewable picture (in tiles, to save memory).",
+  VAEEncode: "Reading your photo into the AI's internal format.",
+  VAELoader: "Loading the color/decoder helper model.",
   SaveImage: "Writing the finished file to disk.",
   LoadImage: "Reading your uploaded photo.",
+  LoadAudio: "Reading your audio file.",
   ControlNetApply: "Forcing the output to follow the pose from your photo.",
+  ControlNetApplyAdvanced: "Forcing the output to follow the pose from your photo.",
+  ControlNetLoader: "Loading the pose-control model.",
   DWPose: "Detecting the skeleton/pose in your photo.",
-  FramePackSampler: "Generating the video frame by frame.",
+  DWPreprocessor: "Detecting the skeleton/pose in your photo.",
+  SDPoseKeypointExtractor: "Reading the pose points from your photo.",
+  SDPoseDrawKeypoints: "Drawing the pose skeleton that guides the AI.",
+  FramePackSampler: "Generating the video frame by frame - the slow part.",
   VHS_VideoCombine: "Stitching the frames into a video file.",
+  CreateVideo: "Assembling the frames into a video.",
   SaveVideo: "Writing the finished video to disk.",
   LTXVImgToVideo: "Using your photo as the first frame of a video.",
   LTXVConditioning: "Setting how fast and far the motion should go.",
+  LatentUpscaleBy: "Enlarging the almost-finished picture 1.5x, then a quick second pass sharpens the details.",
+  AudioSeparation: "Splitting the song into parts (vocals, drums, bass, rest) - runs on the CPU, a few seconds.",
+  AudioCombine: "Mixing the parts back together.",
+  AudioAdjustVolume: "Changing the loudness.",
+  AudioCrop: "Cutting out the selected section.",
+  AudioConcat: "Joining sections end to end.",
+  AudioSpeedShift: "Changing the speed (and pitch).",
+  AudioEqualizer3Band: "Boosting or cutting bass, mids and treble.",
+  SaveAudioMP3: "Encoding and writing the finished MP3 to disk.",
+  GetNode: "Reusing a value from elsewhere in the graph - no work to do.",
+  SetNode: "Storing a value for later use - no work to do.",
+  Note: "Just a note - ignored.",
+  MarkdownNote: "Just a note - ignored.",
+  LoraLoader: "Applying a style addon (LoRA) to the model.",
+  FramePackFindNearestBucket: "Matching the video size to your photo's shape.",
+  ImageScale: "Resizing the picture.",
+  ImageResize: "Resizing the picture.",
+  ConditioningZeroOut: "Preparing an empty guide (keeps the video consistent).",
 };
 
 /* ================= utility ================= */
@@ -318,8 +368,11 @@ function connectEvents() {
     step("Generator started" + (d.workflow ? ` (${d.workflow})` : ""), "run");
     $("#flow-progress").classList.remove("hidden");
     $("#prog-fill").style.width = "3%";
-    $("#prog-label").textContent = "Loading models…";
+    $("#prog-fill").style.background = "";
+    $("#prog-label").textContent = "Starting…";
     $("#prog-num").textContent = "";
+    $("#explain-text").textContent = "Warming up - ComfyUI is checking the workflow and loading the model into the graphics card.";
+    $("#flow-explain").classList.remove("hidden");
     state.runNodes = {};
     if (d.graph) await showGraph(d.graph, d.workflow);
     else if (d.promptId) await loadGraphForRun();
@@ -335,15 +388,9 @@ function connectEvents() {
 
   es.addEventListener("comfy_progress", (e) => {
     const d = JSON.parse(e.data).data;
-    const pct = d.max ? Math.round((d.value / d.max) * 100) : 0;
-    $("#prog-fill").style.width = Math.max(4, pct) + "%";
-    const title = nodeTitle(d.node);
-    $("#prog-label").textContent = `${title}`;
-    $("#prog-num").textContent = `${d.value} / ${d.max}`;
-    $("#explain-text").textContent = explainFor(d.node, title);
     $("#flow-explain").classList.remove("hidden");
     state.runNodes[d.node] = { ...(state.runNodes[d.node] || {}), state: "running", value: d.value, max: d.max };
-    applyNodeStates();
+    applyNodeStates();   // narration + stage counter + top bar live in applyNodeStates
     highlightLinks(d.node, "active");
   });
 
@@ -351,22 +398,27 @@ function connectEvents() {
     const d = JSON.parse(e.data).data;
     for (const o of d.outputs || []) {
       const isVideo = /\.(mp4|webm|gif|mov)$/i.test(o.filename || "");
+      const isAudio = /\.(wav|mp3|flac|ogg|m4a)$/i.test(o.filename || "");
       const url = `/api/file?path=${encodeURIComponent(`D:\\ComfyUI_windows_portable\\ComfyUI\\output\\${o.subfolder ? o.subfolder + "\\" : ""}${o.filename}`)}`;
-      addResult({ name: o.filename, url, video: isVideo, node: d.node });
-      step(`Output created: ${o.filename}`, "ok");
+      addResult({ name: o.filename, url, video: isVideo, audio: isAudio, node: d.node });
+      const kind = isVideo ? "video" : isAudio ? "audio file" : "picture";
+      step(`Finished: ${o.filename} (${kind})`, "ok");
+      $("#explain-text").textContent = `Done - the ${kind} was saved as ${o.filename}. Look for it in the Results tab.`;
+      $("#flow-explain").classList.remove("hidden");
     }
   });
 
   es.addEventListener("comfy_error", (e) => {
     const d = JSON.parse(e.data).data;
+    const friendly = friendlyError(d.message, d.details);
     const el = d.nodeId != null ? state.nodeEls.get(String(d.nodeId)) : null;
     if (el) { el.className = "node st-error"; }
-    $("#prog-label").textContent = "Failed: " + (d.message || "unknown error").slice(0, 120);
+    $("#prog-label").textContent = "Failed: " + friendly;
     $("#prog-fill").style.background = "var(--err)";
     $("#flow-explain").classList.remove("hidden");
-    $("#explain-text").textContent = (d.message || "") + (Array.isArray(d.details) ? " " + d.details.slice(-2).join(" ") : "");
-    step("Generator error: " + (d.message || "unknown"), "err");
-    toast("Generation failed — see Steps tab", "err");
+    $("#explain-text").textContent = friendly;
+    step("Generator error: " + friendly, "err");
+    toast("Generation failed - see Steps tab", "err");
   });
 
   es.addEventListener("comfy_run_end", (e) => {
@@ -375,9 +427,14 @@ function connectEvents() {
     setTimeout(() => $("#flow-progress").classList.add("hidden"), 2600);
     $("#prog-fill").style.width = d.ok ? "100%" : $("#prog-fill").style.width;
     if (d.ok) {
-      $("#prog-label").textContent = `Finished in ${(d.elapsed / 1000).toFixed(1)}s`;
+      const secs = typeof d.elapsed === "number" ? (d.elapsed / 1000).toFixed(1) : null;
+      $("#prog-label").textContent = secs ? `Finished in ${secs}s` : "Finished";
       $("#prog-num").textContent = "✓";
-      step("Generator finished" + (d.elapsed ? ` in ${(d.elapsed / 1000).toFixed(1)}s` : ""), "ok");
+      $("#explain-text").textContent = secs
+        ? `All steps finished in ${secs} seconds - the result was saved and is now in the Results tab.`
+        : "All steps finished - the result was saved and is now in the Results tab.";
+      $("#flow-explain").classList.remove("hidden");
+      step(secs ? `Generator finished in ${secs}s` : "Generator finished", "ok");
       toast("Done! Your result is in the Results tab.", "ok");
       $("#flow-preview").classList.add("hidden");
       setTimeout(loadResults, 700);
@@ -626,14 +683,12 @@ async function showGraph(graph, file) {
     el.style.top = p.y + "px";
     el.dataset.node = n.id;
     const title = NODE_TITLES[n.type] || n.type;
-    const body = (n.widgets_values || []).slice(0, 3).map((v) => {
-      const s = typeof v === "string" ? v : JSON.stringify(v);
-      return `<span>${esc(String(s).slice(0, 44))}</span>`;
-    }).join("");
+    const summary = nodeSummary(n);
+    const body = `<span>${esc(summary.slice(0, 64))}</span>`;
     el.innerHTML = `<div class="n-title">${esc(title)}<span class="n-id">${esc(String(n.id))}</span></div>
-      <div class="n-body">${body || `<span>${esc(n.type)}</span>`}</div>
+      <div class="n-body">${body}</div>
       <div class="n-prog"><i></i></div>`;
-    el.title = `${n.type} (#${n.id})\n${(n.widgets_values || []).join(", ")}`;
+    el.title = `${n.type} (#${n.id})\n${nodeWidgetDump(n)}`;
     nodesEl.appendChild(el);
     state.nodeEls.set(String(n.id), el);
   }
@@ -666,33 +721,172 @@ function nodeTitle(id) {
   if (!el) return "Node " + id;
   return el.querySelector(".n-title").textContent.replace(/\s*#?\d+$/, "").trim();
 }
+
+// Translates raw ComfyUI/Python errors into something a beginner can act on.
+function friendlyError(msg, details) {
+  const raw = String(msg || "") + " " + (Array.isArray(details) ? details.join(" ") : String(details || ""));
+  const low = raw.toLowerCase();
+  if (/out of memory|cuda.*alloc|not enough memory|hip out of memory/.test(low)) {
+    return "The graphics card ran out of memory. Try steps=12, a smaller size (width=512 height=512), or close other apps using the GPU.";
+  }
+  if (/cannot execute because a node is missing the required input|required input is missing/.test(low)) {
+    return "The workflow has a broken connection between boxes - one step has nothing to read. Re-run it from the list, or ask the AI to fix this workflow.";
+  }
+  if (/does not exist|not found|no such file|couldn't find/.test(low) && /safetensors|checkpoint|model/.test(low)) {
+    return "A model file is missing from disk. The AI can check which models are installed with the models command.";
+  }
+  if (/invalid prompt|validation failed|prompt outputs failed validation/.test(low)) {
+    return "ComfyUI rejected a setting in this workflow (often a widget value that no longer matches the node). Ask the AI to rebuild this workflow with wf_build.";
+  }
+  if (/connection refused|econnrefused|fetch failed|socket hang up|network/.test(low)) {
+    return "Lost connection to the generator (ComfyUI). It may have crashed or restarted - the AI will check its status.";
+  }
+  if (/no module named/.test(low)) {
+    const m = raw.match(/No module named ['"]?([\w.]+)/i);
+    return `A Python add-on is missing${m ? ` (${m[1]})` : ""}. The AI can install it into ComfyUI's environment.`;
+  }
+  if (/is not a valid (value|option)|value .* is not in/.test(low)) {
+    return "One of the settings (sampler, scheduler or model name) isn't available in this ComfyUI install. The AI will pick a supported one.";
+  }
+  if (/cudnn|cublas/.test(low)) {
+    return "The GPU driver library hiccupped. Usually fixed by restarting ComfyUI - ask the AI to do that.";
+  }
+  if (/clip.*(length|token)|too many tokens|index.*out of range/.test(low)) {
+    return "The prompt is too long for this model. Shorten it to a sentence or two and try again.";
+  }
+  // keep it short either way
+  const oneLine = String(msg || "unknown error").replace(/\s+/g, " ").trim();
+  return oneLine.length > 160 ? oneLine.slice(0, 157) + "..." : oneLine;
+}
+
+// Widget values as a one-line summary shown inside the node box.
+function nodeSummary(n) {
+  const t = n.type;
+  const wv = Array.isArray(n.widgets_values) ? n.widgets_values : [];
+  const first = () => {
+    const v = wv.find((x) => typeof x === "string" && x && !/^(randomize|fixed|increment|decrement)$/.test(x));
+    return v ? String(v) : "";
+  };
+  if (/checkpointloadersimple/i.test(t)) return first() || "model";
+  if (/clipTextEncode/i.test(t)) {
+    const text = wv.find((x) => typeof x === "string");
+    return text ? String(text) : "prompt";
+  }
+  if (/emptylatentimage/i.test(t)) return `${wv[0] || "?"} x ${wv[1] || "?"} px`;
+  if (/^kSampler$/i.test(t)) {
+    // [seed, control, steps, cfg, sampler, scheduler, denoise]
+    const steps = wv[2], cfg = wv[3], sampler = wv[4], denoise = wv[6];
+    const bits = [steps != null ? `${steps} steps` : "", cfg != null ? `CFG ${cfg}` : "", sampler || ""];
+    if (denoise != null && denoise < 1) bits.push(`denoise ${denoise}`);
+    return bits.filter(Boolean).join(" · ");
+  }
+  if (/samplercustom/i.test(t)) return "custom sampling";
+  if (/latentscaleupby|latentupscale/i.test(t)) return `${wv[1] != null ? wv[1] + "x" : ""} ${wv[0] || ""}`.trim();
+  if (/loadimage|loadaudio/i.test(t)) return first() || "input";
+  if (/saveimage|saveaudio|savevideo/i.test(t)) return first() || "output";
+  if (/lora/i.test(t)) return first() || "style";
+  if (/controlnetloader/i.test(t)) return first() || "pose model";
+  if (wv.length) {
+    return wv.filter((v) => typeof v !== "object").slice(0, 3).map(String).join(" · ");
+  }
+  return n.type;
+}
+
+function nodeWidgetDump(n) {
+  const wv = Array.isArray(n.widgets_values) ? n.widgets_values : Object.entries(n.widgets_values || {});
+  return JSON.stringify(wv).slice(0, 300);
+}
+
+// Plain-English sentence for what a node is doing, with live numbers when
+// the node is mid-run (steps completed, resolution, denoise, ...).
 function explainFor(id, title) {
   const node = state.graph && (state.graph.nodes || []).find((n) => String(n.id) === String(id));
   const t = node ? node.type : "";
+  const info = (state.runNodes || {})[id] || {};
+  const wv = node && Array.isArray(node.widgets_values) ? node.widgets_values : [];
+
+  if (/^kSampler$/i.test(t)) {
+    const steps = wv[2], cfg = wv[3], sampler = wv[4], sched = wv[5];
+    const drawn = info.max ? ` Step ${info.value} of ${info.max} done.` : "";
+    const smp = sampler ? String(sampler).replace(/_/g, " ") : "the sampler";
+    const sch = sched === "karras" ? " (Karras schedule)" : "";
+    return `Painting the image with ${smp}${sch} - ${steps || "?"} steps, CFG ${cfg ?? "?"}. Each step removes a little more noise. This is the slow part.${drawn}`;
+  }
+  if (/samplercustom|framepacksampler/i.test(t)) {
+    const drawn = info.max ? ` Step ${info.value} of ${info.max} done.` : "";
+    return `Drawing the result one step at a time - this is the slow part.${drawn}`;
+  }
+  if (/latentscaleupby/i.test(t)) {
+    const factor = wv[1] != null ? `${wv[1]}x` : "bigger";
+    return `Enlarging the almost-finished picture ${factor} (${wv[0] || "bicubic"}), so the second pass can add sharp detail.`;
+  }
+  if (/emptylatentimage/i.test(t)) return `Creating a blank ${wv[0] || "?"} x ${wv[1] || "?"} pixel canvas to paint on.`;
+  if (/clipTextEncode/i.test(t)) {
+    const text = String(wv.find((x) => typeof x === "string") || "");
+    const preview = text ? ` Reading: "${text.slice(0, 80)}${text.length > 80 ? "..." : ""}"` : "";
+    return `Turning your words into numbers the AI understands.${preview}`;
+  }
+  if (/checkpointloadersimple/i.test(t)) {
+    const name = String(wv[0] || "the model");
+    return `Loading the AI model "${name.replace(/\.safetensors$/i, "")}" into memory - one-time per run.`;
+  }
+  if (/loadimage/i.test(t)) return `Reading your photo "${String(wv[0] || "")}" into the workflow.`;
+  if (/loadaudio/i.test(t)) return `Reading your audio file "${String(wv[0] || wv.audio || "")}" into the workflow.`;
+  if (/saveimage/i.test(t)) return `Writing the finished picture to disk as "${String(wv[0] || "image")}_####.png".`;
+  if (/saveaudiomp3/i.test(t)) return "Encoding the edited audio as an MP3 and writing it to disk.";
+  if (/audioseparation/i.test(t)) return "Splitting the song into vocals, drums and bass - runs on the CPU, takes a few seconds.";
+  if (/vaeencode/i.test(t)) return "Reading your photo into the AI's internal format so it can be re-drawn.";
+
   for (const k of Object.keys(EXPLAIN)) if (t.toLowerCase().includes(k.toLowerCase())) return EXPLAIN[k];
-  if (node && /sampler/i.test(t)) return "Drawing the image one step at a time — this is the slow part.";
-  if (node && /save/i.test(t)) return "Writing the finished file to disk.";
-  if (node && /load/i.test(t)) return "Loading an input into the workflow.";
+  if (/sampler/i.test(t)) return "Drawing the image one step at a time - this is the slow part.";
+  if (/save/i.test(t)) return "Writing the finished file to disk.";
+  if (/load/i.test(t)) return "Loading an input into the workflow.";
   return `${title} is running.`;
 }
 
+// Applies live states to the canvas AND narrates: picks the most interesting
+// running node, updates the stage counter (4 of 9), and shows its sentence.
 function applyNodeStates() {
-  for (const [id, info] of Object.entries(state.runNodes || {})) {
+  const entries = Object.entries(state.runNodes || {});
+  if (!entries.length) return;
+  let bestRunning = null;
+  let finished = 0;
+  for (const [id, info] of entries) {
     const el = state.nodeEls.get(String(id));
-    if (!el) continue;
     const st = info.state || "running";
-    el.className = "node st-" + (st === "finished" ? "done" : st === "running" ? "running" : st);
-    const bar = el.querySelector(".n-prog i");
-    if (bar && info.max) bar.style.width = Math.round(((info.value || 0) / info.max) * 100) + "%";
+    const done = st === "finished" || st === "cached";
+    if (done) finished++;
+    if (el) {
+      el.className = "node st-" + (done ? "done" : st === "running" ? "running" : st);
+      const bar = el.querySelector(".n-prog i");
+      if (bar) bar.style.width = info.max ? Math.round(((info.value || 0) / info.max) * 100) + "%" : (done ? "100%" : "0%");
+    }
     if (st === "running") {
-      const title = nodeTitle(id);
-      if ($("#prog-num").textContent === "" || $("#prog-label").textContent.includes("Loading")) {
-        $("#prog-label").textContent = title;
-        $("#explain-text").textContent = explainFor(id, title);
-      }
+      // prefer the node that actually reports progress (the sampler)
+      if (!bestRunning || info.max) bestRunning = [id, info];
     }
   }
-  // mark nodes not yet touched as idle only once run started
+
+  const total = state.graph ? (state.graph.nodes || []).filter((n) => !/note/i.test(n.type)).length : entries.length;
+  const label = $("#prog-label");
+  const num = $("#prog-num");
+  const explain = $("#explain-text");
+
+  if (bestRunning) {
+    const [id, info] = bestRunning;
+    const title = nodeTitle(id);
+    const stage = Math.min(finished + 1, total);
+    label.textContent = `${stage}/${total} - ${title}`;
+    num.textContent = info.max ? `${info.value} / ${info.max}` : `✓ ${finished}/${total}`;
+    explain.textContent = explainFor(id, title);
+    $("#flow-explain").classList.remove("hidden");
+    // overall bar: finished stages + fraction of the current one
+    const frac = info.max ? (info.value || 0) / info.max : 0;
+    const pct = Math.min(99, Math.round(((finished + frac) / Math.max(1, total)) * 100));
+    $("#prog-fill").style.width = Math.max(4, pct) + "%";
+  } else {
+    label.textContent = `Finishing up - ${finished}/${total} steps done`;
+  }
 }
 
 function highlightLinks(nodeId, cls) {
