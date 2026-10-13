@@ -37,8 +37,22 @@ function isSocketType(type) {
 function typeOk(entry, value) {
   if (value === undefined || value === null) return false;
   if (Array.isArray(entry.type) || (entry.opts && Array.isArray(entry.opts.options))) {
-    // Dropdown selections are strings (or numeric keys) - never booleans.
-    return typeof value === "string" || typeof value === "number";
+    // Dropdown selections are strings (or numeric keys) - never booleans, and
+    // they must actually exist in the option list. Checking membership stops a
+    // stale value (a resolution number sitting where a detect_hand enum now
+    // lives, after a node pack reorders its widgets) from landing on the wrong
+    // input - ComfyUI would reject the whole run for it.
+    if (typeof value === "boolean") return false;
+    const opts = Array.isArray(entry.type) ? entry.type : entry.opts.options;
+    if (!opts || !opts.length) return typeof value === "string" || typeof value === "number";
+    return opts.some((o) => {
+      if (o === value) return true;
+      if (o && typeof o === "object") {
+        const k = "key" in o ? o.key : ("value" in o ? o.value : ("name" in o ? o.name : undefined));
+        return k !== undefined && (k === value || String(k) === String(value));
+      }
+      return String(o) === String(value);
+    });
   }
   const t = String(entry.type);
   if (t === "BOOLEAN") return typeof value === "boolean";
